@@ -192,18 +192,49 @@ class GameStore {
 
   advanceSet() {
     const m = this.state.activeMatch;
+    const prevSet = m.currentSet;
+    const finalUs = m.scoreUs;
+    const finalThem = m.scoreThem;
+    const winnerName = (finalUs > finalThem) ? 'US' : m.teamThem;
+
     // Award set to whoever has more points
-    if (m.scoreUs > m.scoreThem) {
+    if (finalUs > finalThem) {
       m.setsUs += 1;
-    } else if (m.scoreThem > m.scoreUs) {
+    } else if (finalThem > finalUs) {
       m.setsThem += 1;
     }
+
+    // Auto-post set score summary to chat so it is permanently logged
+    this.state.chat.push({
+      id: 'set_summary_' + Date.now(),
+      sender: 'Game Streamer',
+      text: `🏐 Set ${prevSet} Final: US ${finalUs} - ${finalThem} ${m.teamThem} (${winnerName} wins Set ${prevSet})`,
+      set: prevSet,
+      score: `${finalUs} - ${finalThem}`,
+      timestamp: Date.now(),
+      isCheer: true
+    });
+
     m.currentSet += 1;
     m.scoreUs = 0;
     m.scoreThem = 0;
     m.lastScoreTimestamp = Date.now();
     this.triggerHaptic('heavy');
     this.saveState();
+  }
+
+  // Detect if current set is mathematically won (e.g. 25-18, 25-23, 28-26; or 15 in Set 3+)
+  checkSetVictory() {
+    const m = this.state.activeMatch;
+    const targetPoints = (m.currentSet >= 3) ? 15 : 25;
+    const lead = Math.abs(m.scoreUs - m.scoreThem);
+    const maxScore = Math.max(m.scoreUs, m.scoreThem);
+
+    if (maxScore >= targetPoints && lead >= 2) {
+      const winner = m.scoreUs > m.scoreThem ? 'US' : m.teamThem;
+      return { isWon: true, winner, maxScore, minScore: Math.min(m.scoreUs, m.scoreThem) };
+    }
+    return { isWon: false };
   }
 
   // --- Highlights Engine ---

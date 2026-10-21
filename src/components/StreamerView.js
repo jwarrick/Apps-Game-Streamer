@@ -177,7 +177,18 @@ export function renderStreamerView(container, navigate) {
   // --- 2. Update UI from Store ---
   function updateUI() {
     const s = store.getState().activeMatch;
-    btnSet.textContent = `SET ${s.currentSet}`;
+    const victory = store.checkSetVictory();
+
+    if (victory.isWon) {
+      btnSet.classList.add('pulse-victory');
+      btnSet.textContent = `SET ${s.currentSet} ★`;
+      btnSet.title = `Victory detected (${victory.winner} won)! Tap to start next set.`;
+    } else {
+      btnSet.classList.remove('pulse-victory');
+      btnSet.textContent = `SET ${s.currentSet}`;
+      btnSet.title = 'Current Set';
+    }
+
     txtViewerCount.textContent = `(${s.viewers})`;
 
     // Score layout:
@@ -288,7 +299,12 @@ export function renderStreamerView(container, navigate) {
   btnSet.onclick = (e) => {
     e.stopPropagation();
     const cur = store.getState().activeMatch;
-    if (confirm(`Finish Set ${cur.currentSet} and start Set ${cur.currentSet + 1}? Points will reset to 0-0.`)) {
+    const victory = store.checkSetVictory();
+    const message = victory.isWon
+      ? `Victory detected! Finish Set ${cur.currentSet} (US ${cur.scoreUs} - ${cur.scoreThem} ${cur.teamThem}) and start Set ${cur.currentSet + 1}? Score will be logged to chat.`
+      : `Advance to Set ${cur.currentSet + 1}? Current score (US ${cur.scoreUs} - ${cur.scoreThem} ${cur.teamThem}) will be logged to chat.`;
+
+    if (confirm(message)) {
       store.advanceSet();
     }
   };

@@ -434,6 +434,19 @@ html, body {
   letter-spacing: 0.3px;
 }
 
+.apple-btn.pulse-victory {
+  background: rgba(255, 214, 10, 0.28) !important;
+  color: var(--accent-gold) !important;
+  border-color: var(--accent-gold) !important;
+  box-shadow: 0 0 16px rgba(255, 214, 10, 0.7);
+  animation: setVictoryPulse 1.2s infinite alternate ease-in-out;
+}
+
+@keyframes setVictoryPulse {
+  0% { transform: scale(1); box-shadow: 0 0 8px rgba(255, 214, 10, 0.4); }
+  100% { transform: scale(1.08); box-shadow: 0 0 22px rgba(255, 214, 10, 0.95); }
+}
+
 .btn-highlight {
   background: var(--accent-gold);
   color: #000000;

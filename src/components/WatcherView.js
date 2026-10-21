@@ -53,6 +53,12 @@ export function renderWatcherView(container, navigate) {
           <!-- Chat bubbles populated dynamically -->
         </div>
 
+        <!-- Viewer Name Tag -->
+        <div style="padding: 6px 14px; font-size: 11px; color: var(--text-secondary); display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border-subtle);">
+          <span>Posting as: <b id="lbl-viewer-name" style="color: #fff;">Family Member</b></span>
+          <button class="apple-btn" id="btn-edit-viewer-name" style="padding: 2px 8px; font-size: 10px;">Change</button>
+        </div>
+
         <div class="chat-input-row">
           <input type="text" class="chat-input" id="input-chat-msg" placeholder="Cheer for the team..." />
           <button class="apple-btn apple-btn-primary" id="btn-send-chat" style="padding: 8px 14px;">Send</button>
@@ -69,10 +75,36 @@ export function renderWatcherView(container, navigate) {
   const chatMessages = container.querySelector('#chat-messages');
   const inputChatMsg = container.querySelector('#input-chat-msg');
   const btnSendChat = container.querySelector('#btn-send-chat');
+  const lblViewerName = container.querySelector('#lbl-viewer-name');
+  const btnEditViewerName = container.querySelector('#btn-edit-viewer-name');
 
   const wOpponent = container.querySelector('#w-opponent');
   const wScoreLine = container.querySelector('#w-score-line');
   const wSetInfo = container.querySelector('#w-set-info');
+
+  function getViewerName() {
+    return localStorage.getItem('gamestreamer_viewer_name') || '';
+  }
+
+  function setViewerName(name) {
+    if (name && name.trim()) {
+      localStorage.setItem('gamestreamer_viewer_name', name.trim());
+      lblViewerName.textContent = name.trim();
+    }
+  }
+
+  const initialName = getViewerName();
+  if (initialName) {
+    lblViewerName.textContent = initialName;
+  }
+
+  btnEditViewerName.onclick = () => {
+    const current = getViewerName() || 'Grandma';
+    const chosen = prompt('What is your name for the chat? (e.g. Grandma, Uncle Dave)', current);
+    if (chosen !== null) {
+      setViewerName(chosen);
+    }
+  };
 
   function update() {
     const s = store.getState().activeMatch;
@@ -114,7 +146,19 @@ export function renderWatcherView(container, navigate) {
   function sendMessage() {
     const text = inputChatMsg.value.trim();
     if (!text) return;
-    store.postChatMessage('Family Viewer', text);
+
+    let sender = getViewerName();
+    if (!sender) {
+      const chosen = prompt('What is your name for the chat? (e.g. Grandma, Uncle Dave)', 'Grandma');
+      if (chosen && chosen.trim()) {
+        setViewerName(chosen);
+        sender = chosen.trim();
+      } else {
+        sender = 'Family Viewer';
+      }
+    }
+
+    store.postChatMessage(sender, text);
     inputChatMsg.value = '';
   }
 
