@@ -755,6 +755,8 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
 }
 
 .replay-actions-left {
@@ -763,13 +765,33 @@ html, body {
   gap: 10px;
 }
 
+.replay-seek-btn {
+  padding: 7px 13px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 9999px;
+  letter-spacing: -0.2px;
+}
+
+.replay-play-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 14px rgba(255, 255, 255, 0.2);
+}
+
 /* Segmented Speed Controller */
 .speed-toggle-group {
   display: inline-flex;
   background: rgba(255, 255, 255, 0.08);
   border-radius: 9999px;
-  padding: 3px;
+  padding: 4px;
   border: 1px solid var(--border-subtle);
+  margin-left: auto;
 }
 
 .speed-btn {

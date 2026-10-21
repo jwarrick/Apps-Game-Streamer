@@ -3,6 +3,19 @@
 // With Always-Visible Speed Toggles: 1x, 0.5x, 0.25x (Defaulting to 1x)
 // ==========================================================================
 
+const PLAY_ICON = `
+  <svg width="14" height="16" viewBox="0 0 14 16" fill="currentColor" style="margin-left: 2px;">
+    <path d="M12.8 7.1C13.4 7.5 13.4 8.5 12.8 8.9L1.8 15.3C1.1 15.7 0.2 15.2 0.2 14.4L0.2 1.6C0.2 0.8 1.1 0.3 1.8 0.7L12.8 7.1Z" />
+  </svg>
+`;
+
+const PAUSE_ICON = `
+  <svg width="12" height="14" viewBox="0 0 12 14" fill="currentColor">
+    <rect width="3.5" height="14" rx="1.75" />
+    <rect x="7.5" width="3.5" height="14" rx="1.75" />
+  </svg>
+`;
+
 export class ReplayPlayer {
   constructor(clip, onClose) {
     this.clip = clip;
@@ -36,10 +49,13 @@ export class ReplayPlayer {
 
         <div class="replay-controls">
           <div class="replay-button-row">
+            <!-- Left & Play & Right: -10s, Play/Pause, +10s -->
             <div class="replay-actions-left">
-              <button class="apple-btn" id="btn-play-pause">⏸</button>
-              <button class="apple-btn" id="btn-seek-back">⏮ 10s</button>
-              <button class="apple-btn" id="btn-seek-forward">10s ⏭</button>
+              <button class="apple-btn replay-seek-btn" id="btn-seek-back" title="Rewind 10 seconds">-10s</button>
+              <button class="apple-btn apple-btn-primary replay-play-btn" id="btn-play-pause" title="Play or Pause">
+                ${PAUSE_ICON}
+              </button>
+              <button class="apple-btn replay-seek-btn" id="btn-seek-forward" title="Fast forward 10 seconds">+10s</button>
             </div>
 
             <!-- Always visible segmented speed toggles, default 1x -->
@@ -78,10 +94,10 @@ export class ReplayPlayer {
     btnPlayPause.onclick = () => {
       if (this.video.paused) {
         this.video.play();
-        btnPlayPause.textContent = '⏸';
+        btnPlayPause.innerHTML = PAUSE_ICON;
       } else {
         this.video.pause();
-        btnPlayPause.textContent = '▶';
+        btnPlayPause.innerHTML = PLAY_ICON;
       }
     };
 
@@ -106,7 +122,7 @@ export class ReplayPlayer {
     });
 
     this.video.onended = () => {
-      btnPlayPause.textContent = '▶';
+      btnPlayPause.innerHTML = PLAY_ICON;
     };
   }
 

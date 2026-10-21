@@ -16,7 +16,7 @@ export function renderHubView(container, navigate) {
         <header class="hub-header">
           <div class="hub-brand">
             <span style="font-size: 24px;">🏐</span>
-            <h1>Wildcats Streamer</h1>
+            <h1>Game Streamer</h1>
           </div>
           <button class="apple-btn" id="btn-go-live-header">🎥 Go Live</button>
         </header>
