@@ -641,6 +641,32 @@ html, body {
   font-weight: 700;
 }
 
+.btn-drawer-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: 50%;
+  padding: 0;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.btn-drawer-close:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.btn-drawer-close:active {
+  transform: scale(0.90);
+  background: rgba(255, 255, 255, 0.25);
+}
+
 .streamer-drawer-messages {
   flex: 1;
   padding: 16px;

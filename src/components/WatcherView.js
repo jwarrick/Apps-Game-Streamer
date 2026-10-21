@@ -57,7 +57,9 @@ export function renderWatcherView(container, navigate) {
       <div class="streamer-chat-drawer" id="streamer-chat-drawer">
         <div class="streamer-drawer-header">
           <h3>Viewer Comments</h3>
-          <button class="apple-btn" id="btn-close-drawer" style="padding: 5px 12px; font-size: 14px;">✕</button>
+          <button class="btn-drawer-close" id="btn-close-drawer" title="Close Drawer (Slide right)" aria-label="Close Drawer">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" style="display: block;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
         </div>
 
         <div class="streamer-drawer-messages" id="drawer-chat-list">
