@@ -92,6 +92,13 @@ const DEFAULT_STATE = {
           isUploading: false,
           timestamp: 1729270800000
         }
+      ],
+      comments: [
+        { sender: 'Grandma', text: 'Let\'s go Wildcats! Looking good! 🏐' },
+        { sender: 'Game Streamer', text: '🏐 Set 1 Final: US 25 - 21 WEST HIGH', isCheer: true },
+        { sender: 'Game Streamer', text: '🏐 Set 2 Final: US 23 - 25 WEST HIGH', isCheer: true },
+        { sender: 'Game Streamer', text: '🏐 Set 3 Final: US 15 - 11 WEST HIGH', isCheer: true },
+        { sender: 'Uncle Dave', text: 'What a match! Huge win!' }
       ]
     },
     {
@@ -223,18 +230,72 @@ class GameStore {
     this.saveState();
   }
 
-  // Detect if current set is mathematically won (e.g. 25-18, 25-23, 28-26; or 15 in Set 3+)
+  // Always check 25 points, win by 2
   checkSetVictory() {
     const m = this.state.activeMatch;
-    const targetPoints = (m.currentSet >= 3) ? 15 : 25;
     const lead = Math.abs(m.scoreUs - m.scoreThem);
     const maxScore = Math.max(m.scoreUs, m.scoreThem);
+    return maxScore >= 25 && lead >= 2;
+  }
 
-    if (maxScore >= targetPoints && lead >= 2) {
-      const winner = m.scoreUs > m.scoreThem ? 'US' : m.teamThem;
-      return { isWon: true, winner, maxScore, minScore: Math.min(m.scoreUs, m.scoreThem) };
+  // Finish match, log final set score, save complete comment transcript to archive
+  finishMatch() {
+    const m = this.state.activeMatch;
+    const prevSet = m.currentSet;
+    const finalUs = m.scoreUs;
+    const finalThem = m.scoreThem;
+
+    // If points were scored in this set, award the set and log it
+    if (finalUs > 0 || finalThem > 0) {
+      if (finalUs > finalThem) {
+        m.setsUs += 1;
+      } else if (finalThem > finalUs) {
+        m.setsThem += 1;
+      }
+
+      this.state.chat.push({
+        id: 'set_summary_' + Date.now(),
+        sender: 'Game Streamer',
+        text: `🏐 Set ${prevSet} Final: US ${finalUs} - ${finalThem} ${m.teamThem}`,
+        set: prevSet,
+        score: `${finalUs} - ${finalThem}`,
+        timestamp: Date.now(),
+        isCheer: true
+      });
     }
-    return { isWon: false };
+
+    // Post final match milestone to chat
+    const matchWinner = m.setsUs > m.setsThem ? 'US' : m.teamThem;
+    this.state.chat.push({
+      id: 'match_final_' + Date.now(),
+      sender: 'Game Streamer',
+      text: `🏆 Match Final: US won ${m.setsUs} set${m.setsUs === 1 ? '' : 's'}, ${m.teamThem} won ${m.setsThem} set${m.setsThem === 1 ? '' : 's'} (${matchWinner} wins match)`,
+      timestamp: Date.now(),
+      isCheer: true
+    });
+
+    m.isLive = false;
+
+    // Save complete comment transcript and outcome with the match in archive
+    let matchEntry = this.state.matches.find(item => item.id === m.id);
+    if (!matchEntry) {
+      matchEntry = {
+        id: m.id,
+        date: m.date,
+        opponent: m.opponent,
+        highlights: []
+      };
+      this.state.matches.unshift(matchEntry);
+    }
+
+    matchEntry.isLive = false;
+    matchEntry.setsUs = m.setsUs;
+    matchEntry.setsThem = m.setsThem;
+    matchEntry.currentSet = m.currentSet;
+    matchEntry.comments = [...this.state.chat]; // Full permanent comment transcript!
+
+    this.triggerHaptic('heavy');
+    this.saveState();
   }
 
   // --- Highlights Engine ---

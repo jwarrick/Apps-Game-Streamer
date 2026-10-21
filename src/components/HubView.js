@@ -98,6 +98,22 @@ export function renderHubView(container, navigate) {
                     </div>
                   `).join('')}
                 </div>
+
+                <!-- Match Comments Transcript Section -->
+                <div style="padding: 6px 12px; border-top: 1px solid var(--border-subtle); display: flex; justify-content: flex-end;">
+                  <button class="apple-btn btn-toggle-transcript" data-match-id="${m.id}" data-count="${(m.comments || []).length}" style="padding: 4px 10px; font-size: 11px;">
+                    💬 Comments (${(m.comments || []).length})
+                  </button>
+                </div>
+
+                <div class="match-transcript-list" id="transcript-${m.id}" style="display: none; padding: 10px 16px; background: rgba(0, 0, 0, 0.4); border-top: 1px solid var(--border-subtle); font-size: 13px;">
+                  ${(m.comments && m.comments.length > 0) ? m.comments.map(c => `
+                    <div style="margin-bottom: 6px;">
+                      <span style="color: var(--text-tertiary); font-size: 11px;">${c.sender}:</span>
+                      <span style="color: ${c.isCheer ? 'var(--accent-gold)' : 'inherit'}; font-weight: ${c.isCheer ? '600' : '400'};"> ${c.text}</span>
+                    </div>
+                  `).join('') : '<div style="color: var(--text-tertiary); font-size: 12px;">No comments recorded for this match.</div>'}
+                </div>
               </div>
             `).join('')}
           </div>
@@ -119,6 +135,19 @@ export function renderHubView(container, navigate) {
         showMatchSetupModal(navigate, user);
       };
     }
+
+    // Toggle transcript buttons
+    container.querySelectorAll('.btn-toggle-transcript').forEach(btn => {
+      btn.onclick = () => {
+        const id = btn.dataset.matchId;
+        const box = container.querySelector(`#transcript-${id}`);
+        if (box) {
+          const isHidden = box.style.display === 'none';
+          box.style.display = isHidden ? 'block' : 'none';
+          btn.textContent = isHidden ? '✕ Hide Comments' : `💬 Comments (${btn.dataset.count || 0})`;
+        }
+      };
+    });
 
     // Clip play buttons
     container.querySelectorAll('.btn-play-clip').forEach(btn => {

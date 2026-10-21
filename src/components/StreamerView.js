@@ -112,6 +112,27 @@ export function renderStreamerView(container, navigate) {
             <button class="apple-btn btn-highlight-select" data-label="⏱️ Long Point">⏱️ Long Point</button>
           </div>
         </div>
+      <!-- Set Action Modal (Next Set, Match Finished, Cancel) -->
+      <div class="highlight-pill-backdrop" id="set-action-modal" style="display: none;">
+        <div class="highlight-pill-dialog" style="max-width: 320px;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <h3 style="font-size: 16px; font-weight: 700;" id="set-modal-title">Set 1 Options</h3>
+            <button class="apple-btn" id="btn-cancel-set-modal" style="padding: 4px 10px; font-size: 12px;">✕</button>
+          </div>
+          <p style="font-size: 13px; color: var(--text-secondary);" id="set-modal-score">Current Score: US 25 - 18 LINCOLN</p>
+
+          <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
+            <button class="apple-btn apple-btn-primary" id="btn-modal-next-set" style="padding: 12px; font-size: 14px; font-weight: 600;">
+              ▶ Next Set
+            </button>
+            <button class="apple-btn apple-btn-danger" id="btn-modal-finish-match" style="padding: 12px; font-size: 14px; font-weight: 600;">
+              🏆 Match Finished
+            </button>
+            <button class="apple-btn" id="btn-modal-close-set" style="padding: 10px; font-size: 13px;">
+              Cancel
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   `;
@@ -137,6 +158,15 @@ export function renderStreamerView(container, navigate) {
   // Highlight modal elements
   const highlightModal = container.querySelector('#highlight-pill-modal');
   const btnCancelHighlight = container.querySelector('#btn-cancel-highlight');
+
+  // Set action modal elements
+  const setActionModal = container.querySelector('#set-action-modal');
+  const setModalTitle = container.querySelector('#set-modal-title');
+  const setModalScore = container.querySelector('#set-modal-score');
+  const btnModalNextSet = container.querySelector('#btn-modal-next-set');
+  const btnModalFinishMatch = container.querySelector('#btn-modal-finish-match');
+  const btnModalCloseSet = container.querySelector('#btn-modal-close-set');
+  const btnCancelSetModal = container.querySelector('#btn-cancel-set-modal');
 
   // Chat drawer elements
   const chatEdgeTab = container.querySelector('#chat-edge-tab');
@@ -176,19 +206,14 @@ export function renderStreamerView(container, navigate) {
 
   // --- 2. Update UI from Store ---
   function updateUI() {
-    const s = store.getState().activeMatch;
-    const victory = store.checkSetVictory();
+    const isVictory = store.checkSetVictory();
 
-    if (victory.isWon) {
+    if (isVictory) {
       btnSet.classList.add('pulse-victory');
-      btnSet.textContent = `SET ${s.currentSet} ★`;
-      btnSet.title = `Victory detected (${victory.winner} won)! Tap to start next set.`;
     } else {
       btnSet.classList.remove('pulse-victory');
-      btnSet.textContent = `SET ${s.currentSet}`;
-      btnSet.title = 'Current Set';
     }
-
+    btnSet.textContent = `SET ${s.currentSet}`;
     txtViewerCount.textContent = `(${s.viewers})`;
 
     // Score layout:
@@ -299,13 +324,39 @@ export function renderStreamerView(container, navigate) {
   btnSet.onclick = (e) => {
     e.stopPropagation();
     const cur = store.getState().activeMatch;
-    const victory = store.checkSetVictory();
-    const message = victory.isWon
-      ? `Victory detected! Finish Set ${cur.currentSet} (US ${cur.scoreUs} - ${cur.scoreThem} ${cur.teamThem}) and start Set ${cur.currentSet + 1}? Score will be logged to chat.`
-      : `Advance to Set ${cur.currentSet + 1}? Current score (US ${cur.scoreUs} - ${cur.scoreThem} ${cur.teamThem}) will be logged to chat.`;
+    const teamThem = (cur.opponent || 'THEM').toUpperCase();
+    setModalTitle.textContent = `Set ${cur.currentSet} Options`;
+    setModalScore.textContent = `Current Score: US ${cur.scoreUs} - ${cur.scoreThem} ${teamThem}`;
+    setActionModal.style.display = 'flex';
+  };
 
-    if (confirm(message)) {
-      store.advanceSet();
+  btnModalNextSet.onclick = (e) => {
+    e.stopPropagation();
+    store.advanceSet();
+    setActionModal.style.display = 'none';
+  };
+
+  btnModalFinishMatch.onclick = (e) => {
+    e.stopPropagation();
+    store.finishMatch();
+    setActionModal.style.display = 'none';
+    cleanup();
+    navigate('/');
+  };
+
+  btnModalCloseSet.onclick = (e) => {
+    e.stopPropagation();
+    setActionModal.style.display = 'none';
+  };
+
+  btnCancelSetModal.onclick = (e) => {
+    e.stopPropagation();
+    setActionModal.style.display = 'none';
+  };
+
+  setActionModal.onclick = (e) => {
+    if (e.target === setActionModal) {
+      setActionModal.style.display = 'none';
     }
   };
 
