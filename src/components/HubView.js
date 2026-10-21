@@ -19,7 +19,10 @@ export function renderHubView(container, navigate) {
             <span style="font-size: 24px;">🏐</span>
             <h1>Game Streamer</h1>
           </div>
-          <button class="apple-btn" id="btn-go-live-header">🎥 Go Live</button>
+          <div style="display: flex; gap: 8px;">
+            <button class="apple-btn" id="btn-watch-header" title="Open Viewer Experience">👀 Watch</button>
+            <button class="apple-btn apple-btn-primary" id="btn-go-live-header">🎥 Go Live</button>
+          </div>
         </header>
 
         <!-- Live Hero Section (Displayed only when active) -->
@@ -44,8 +47,21 @@ export function renderHubView(container, navigate) {
             </button>
           </div>
         ` : `
-          <div class="frosted-glass" style="border-radius: 16px; padding: 18px 20px; text-align: center; color: var(--text-secondary); font-size: 14px;">
-            ⚪ No live game streaming right now. Explore past match highlights below.
+          <div class="live-hero-card frosted-glass" style="border-style: dashed; border-color: rgba(255, 255, 255, 0.16);">
+            <div class="live-hero-header">
+              <span class="live-badge" style="background: rgba(255, 255, 255, 0.08); color: var(--text-secondary);">⚪ No Live Game Streaming</span>
+            </div>
+
+            <div class="live-matchup-title" style="font-size: 16px; margin: 4px 0 6px 0;">
+              Preview Family Viewer Experience
+            </div>
+            <p style="font-size: 13px; color: var(--text-secondary); margin: 0 0 14px 0;">
+              Test the full-screen live stream video player, overlay comments drawer, voice-to-text dictation, and viewer name tools.
+            </p>
+
+            <button class="apple-btn apple-btn-primary btn-watch-live" id="btn-watch-demo">
+              👀 Open Viewer Experience (Demo Live Stream)
+            </button>
           </div>
         `}
 
@@ -122,10 +138,21 @@ export function renderHubView(container, navigate) {
     `;
 
     // Setup action listeners
+    const openWatcher = () => {
+      if (!store.getState().activeMatch.isLive) {
+        store.startDemoStream();
+      }
+      navigate('/watch');
+    };
+
     const btnWatchLive = container.querySelector('#btn-watch-live');
-    if (btnWatchLive) {
-      btnWatchLive.onclick = () => navigate('/watch');
-    }
+    if (btnWatchLive) btnWatchLive.onclick = openWatcher;
+
+    const btnWatchDemo = container.querySelector('#btn-watch-demo');
+    if (btnWatchDemo) btnWatchDemo.onclick = openWatcher;
+
+    const btnWatchHeader = container.querySelector('#btn-watch-header');
+    if (btnWatchHeader) btnWatchHeader.onclick = openWatcher;
 
     const btnGoLive = container.querySelector('#btn-go-live-header');
     if (btnGoLive) {

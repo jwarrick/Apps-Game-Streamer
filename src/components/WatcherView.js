@@ -33,7 +33,10 @@ export function renderWatcherView(container, navigate) {
 
           <!-- Top-Right Actions -->
           <div class="watcher-top-actions">
-            <button class="apple-btn frosted-glass" id="btn-back-hub">
+            <button class="apple-btn frosted-glass" id="btn-simulate-cheer" style="font-size: 12px; padding: 6px 12px;" title="Simulate a new comment to test the pulsing drawer tab">
+              🔔 Test Incoming Cheer
+            </button>
+            <button class="apple-btn frosted-glass" id="btn-back-hub" style="font-size: 12px; padding: 6px 12px;">
               ✕ Exit
             </button>
           </div>
@@ -137,7 +140,24 @@ export function renderWatcherView(container, navigate) {
     }
   };
 
+  const btnSimulateCheer = container.querySelector('#btn-simulate-cheer');
   btnBackHub.onclick = () => navigate('/');
+
+  const sampleCheers = [
+    { sender: 'Uncle Dave', text: 'What an awesome spike! 🔥' },
+    { sender: 'Grandma', text: 'Cheering from home! Let\'s go Wildcats! 🏐' },
+    { sender: 'Aunt Sarah', text: 'Incredible dig! Keep it up! 💪' },
+    { sender: 'Cousin Mike', text: 'Ace! That serve was untouchable! 🎯' }
+  ];
+  let cheerIndex = 0;
+  if (btnSimulateCheer) {
+    btnSimulateCheer.onclick = (e) => {
+      e.stopPropagation();
+      const cheer = sampleCheers[cheerIndex % sampleCheers.length];
+      cheerIndex++;
+      store.postChatMessage(cheer.sender, cheer.text);
+    };
+  }
 
   // --- Drawer Open / Close Logic ---
   function openDrawer() {

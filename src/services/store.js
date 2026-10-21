@@ -456,6 +456,26 @@ class GameStore {
     this.saveState();
   }
 
+  startDemoStream() {
+    this.state.activeMatch = {
+      id: 'demo-live',
+      isLive: true,
+      date: 'Today',
+      opponent: 'Lincoln High',
+      teamUs: 'US',
+      teamThem: 'LINCOLN',
+      courtSideUs: 'left',
+      scoreUs: 18,
+      scoreThem: 16,
+      setsUs: 1,
+      setsThem: 0,
+      currentSet: 2,
+      lastScoreTimestamp: Date.now(),
+      viewers: 3
+    };
+    this.saveState();
+  }
+
   stopBroadcast() {
     this.state.activeMatch.isLive = false;
     const existing = this.state.matches.find(item => item.id === this.state.activeMatch.id);
