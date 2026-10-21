@@ -5,7 +5,7 @@
 import { store } from '../services/store.js';
 import { ReplayPlayer } from './ReplayPlayer.js';
 import { authService } from '../services/auth.js';
-import { downloadHighlightVideo } from '../services/download.js';
+import { shareHighlightVideo } from '../services/share.js';
 
 export function renderHubView(container, navigate) {
   function update() {
@@ -226,7 +226,7 @@ export function renderHubView(container, navigate) {
         if (match) {
           const clip = match.highlights.find(c => c.id === clipId);
           if (clip) {
-            downloadHighlightVideo(clip, btn);
+            shareHighlightVideo(clip, btn);
           }
         }
       };

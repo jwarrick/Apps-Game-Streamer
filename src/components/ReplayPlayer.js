@@ -1,4 +1,4 @@
-import { downloadHighlightVideo } from '../services/download.js';
+import { shareHighlightVideo } from '../services/share.js';
 
 const PLAY_ICON = `
   <svg width="14" height="16" viewBox="0 0 14 16" fill="currentColor" style="margin-left: 2px;">
@@ -95,7 +95,7 @@ export class ReplayPlayer {
     btnClose.onclick = () => this.destroy();
 
     if (btnDownload) {
-      btnDownload.onclick = () => downloadHighlightVideo(this.clip, btnDownload);
+      btnDownload.onclick = () => shareHighlightVideo(this.clip, btnDownload);
     }
 
     // Close on backdrop click outside modal
