@@ -121,7 +121,7 @@ export function renderStreamerView(container, navigate) {
               <div style="font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Target Point</div>
               <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;" id="highlight-target-hint">Rally currently in play</div>
             </div>
-            <button class="apple-btn" id="btn-toggle-point-target" style="padding: 6px 14px; font-size: 13px; font-weight: 700; border-radius: 8px; background: rgba(255,255,255,0.12); color: #fff; border: 1px solid rgba(255,255,255,0.3);">
+            <button class="apple-btn btn-point-target-toggle current" id="btn-toggle-point-target">
               Current Pt.
             </button>
           </div>
@@ -131,7 +131,7 @@ export function renderStreamerView(container, navigate) {
           <div class="highlight-pill-grid">
             <button class="apple-btn btn-highlight-select" data-label="⛏️ Amazing Dig">⛏️ Amazing Dig</button>
             <button class="apple-btn btn-highlight-select" data-label="💣 Crazy Kill">💣 Crazy Kill</button>
-            <button class="apple-btn btn-highlight-select" data-label="🔥 Ace!">🔥 Ace!</button>
+            <button class="apple-btn btn-highlight-select" data-label="🔥 Sweet Serve">🔥 Sweet Serve</button>
             <button class="apple-btn btn-highlight-select" data-label="💪 Big Block!">💪 Big Block!</button>
             <button class="apple-btn btn-highlight-select" data-label="🎯 Cool Set">🎯 Cool Set</button>
             <button class="apple-btn btn-highlight-select" data-label="⏱️ Long Point">⏱️ Long Point</button>
@@ -467,46 +467,49 @@ export function renderStreamerView(container, navigate) {
     if (e.target === exitModal) closeExitModal();
   };
 
+  // Helper to visually toggle point target colors & keep button size constant
+  function updatePointTargetUI(target) {
+    highlightPointTarget = target;
+    if (target === 'previous') {
+      btnTogglePointTarget.textContent = 'Previous Pt.';
+      btnTogglePointTarget.className = 'apple-btn btn-point-target-toggle previous';
+      highlightTargetHint.textContent = 'Prior rally (footage of previous point)';
+    } else {
+      btnTogglePointTarget.textContent = 'Current Pt.';
+      btnTogglePointTarget.className = 'apple-btn btn-point-target-toggle current';
+      highlightTargetHint.textContent = 'Rally currently in play (saves once point finishes)';
+    }
+  }
+
   // --- 5. Highlight Pill Picker Trigger (Player ★ vs Team ★, Current vs Previous Pt) ---
   btnHighlightPlayer.onclick = (e) => {
     e.stopPropagation();
     chosenHighlightType = 'player';
-    highlightPointTarget = 'current';
     activeTriggerBtn = btnHighlightPlayer;
     highlightModalBadge.textContent = 'PLAYER ★';
     highlightModalBadge.style.color = 'var(--accent-gold)';
     highlightModalBadge.style.borderColor = 'var(--accent-gold)';
     highlightModalBadge.style.background = 'rgba(255, 214, 10, 0.2)';
-    btnTogglePointTarget.textContent = 'Current Pt.';
-    highlightTargetHint.textContent = 'Rally currently in play (saves once point finishes)';
+    updatePointTargetUI('current'); // Always reset to Current Pt. (do not persist)
     highlightModal.style.display = 'flex';
   };
 
   btnHighlightTeam.onclick = (e) => {
     e.stopPropagation();
     chosenHighlightType = 'team';
-    highlightPointTarget = 'current';
     activeTriggerBtn = btnHighlightTeam;
     highlightModalBadge.textContent = 'TEAM ★';
     highlightModalBadge.style.color = '#0A84FF';
     highlightModalBadge.style.borderColor = '#0A84FF';
     highlightModalBadge.style.background = 'rgba(10, 132, 255, 0.2)';
-    btnTogglePointTarget.textContent = 'Current Pt.';
-    highlightTargetHint.textContent = 'Rally currently in play (saves once point finishes)';
+    updatePointTargetUI('current'); // Always reset to Current Pt. (do not persist)
     highlightModal.style.display = 'flex';
   };
 
   btnTogglePointTarget.onclick = (e) => {
     e.stopPropagation();
-    if (highlightPointTarget === 'current') {
-      highlightPointTarget = 'previous';
-      btnTogglePointTarget.textContent = 'Previous Pt.';
-      highlightTargetHint.textContent = 'Prior rally (saves footage of previous point)';
-    } else {
-      highlightPointTarget = 'current';
-      btnTogglePointTarget.textContent = 'Current Pt.';
-      highlightTargetHint.textContent = 'Rally currently in play (saves once point finishes)';
-    }
+    const nextTarget = (highlightPointTarget === 'current') ? 'previous' : 'current';
+    updatePointTargetUI(nextTarget);
   };
 
   btnCancelHighlight.onclick = (e) => {

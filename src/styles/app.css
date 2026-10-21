@@ -600,6 +600,47 @@ body {
   animation: workingPulse 0.8s infinite alternate ease-in-out;
 }
 
+/* Broadcaster-only trashcan button (visually separated to avoid accidental clicks) */
+.btn-trash-clip {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 50%;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  margin-left: 6px;
+  position: relative;
+  transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+/* Subtle separator bar between normal actions (play/share) and destructive trashcan */
+.btn-trash-clip::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 7px;
+  bottom: 7px;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.btn-trash-clip:hover {
+  color: #FF453A;
+  background: rgba(255, 69, 58, 0.18);
+  border-color: rgba(255, 69, 58, 0.35);
+}
+
+.btn-trash-clip:active {
+  transform: scale(0.92);
+}
+
 @keyframes workingPulse {
   0% { transform: scale(1); opacity: 0.7; }
   100% { transform: scale(1.08); opacity: 1; }
@@ -831,25 +872,61 @@ body {
 }
 
 .highlight-pill-grid {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
 }
 
 .btn-highlight-select {
-  padding: 10px 16px;
+  padding: 10px 8px;
   border-radius: 12px;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
-  justify-content: flex-start;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid var(--border-subtle);
   color: #fff;
+  white-space: nowrap;
 }
 
 .btn-highlight-select:active {
   background: rgba(255, 255, 255, 0.2);
   transform: scale(0.97);
+}
+
+/* Fixed-width point target toggle (eliminates layout shifts when switching text) */
+.btn-point-target-toggle {
+  width: 125px;
+  min-width: 125px;
+  max-width: 125px;
+  height: 34px;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  box-sizing: border-box;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.btn-point-target-toggle.current {
+  background: rgba(52, 199, 89, 0.22);
+  color: #34C759;
+  border: 1px solid rgba(52, 199, 89, 0.6);
+}
+
+.btn-point-target-toggle.previous {
+  background: rgba(255, 149, 0, 0.25);
+  color: #FF9F0A;
+  border: 1px solid rgba(255, 149, 0, 0.7);
 }
 
 /* Broadcaster Chat Sidebar Drawer & Edge Tab */

@@ -75,7 +75,7 @@ const DEFAULT_STATE = {
           type: 'player',
           set: 1,
           score: '14 - 12',
-          label: '🔥 Ace!',
+          label: '🔥 Sweet Serve',
           videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
           driveFileId: 'drive_h_1',
           driveUrl: 'https://drive.google.com/file/d/drive_h_1/view',
@@ -617,6 +617,7 @@ class GameStore {
     const m = this.state.activeMatch;
     const clipId = 'h_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
     const driveId = 'drive_' + clipId;
+    const driveFolderUrl = this.getDriveLocation();
     const newClip = {
       id: clipId,
       type: type, // 'player' or 'team'
@@ -626,6 +627,7 @@ class GameStore {
       videoUrl: videoBlobOrUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
       driveFileId: driveId,
       driveUrl: `https://drive.google.com/file/d/${driveId}/view`,
+      driveFolderUrl: driveFolderUrl,
       fileSizeBytes: 3400000,
       isUploading: true,
       isStarred: false,
@@ -924,6 +926,66 @@ class GameStore {
 
     this.triggerHaptic('light');
     this.saveState();
+  }
+
+  // --- Google Drive Persistent Location & Safe Fallback ---
+  getDriveLocation() {
+    if (this.state && this.state.driveFolderUrl && this.state.driveFolderUrl.trim()) {
+      return this.state.driveFolderUrl.trim();
+    }
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const saved = localStorage.getItem('gamestreamer_drive_folder_url');
+        if (saved && saved.trim()) {
+          if (this.state) this.state.driveFolderUrl = saved.trim();
+          return saved.trim();
+        }
+      }
+    } catch (e) {}
+    // Guaranteed default location so highlights always have a backup target
+    return 'https://drive.google.com/drive/my-drive';
+  }
+
+  setDriveLocation(url) {
+    if (!url) return;
+    const clean = url.trim();
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('gamestreamer_drive_folder_url', clean);
+      }
+      this.state.driveFolderUrl = clean;
+    } catch (e) {}
+    this.saveState();
+  }
+
+  // --- Broadcaster-Only Archive Highlight Deletion ---
+  deleteHighlight(matchId, clipId) {
+    const match = this.state.matches.find(m => m.id === matchId);
+    if (!match || !match.highlights) return false;
+
+    const clipIndex = match.highlights.findIndex(h => h.id === clipId);
+    if (clipIndex === -1) return false;
+
+    const [deletedClip] = match.highlights.splice(clipIndex, 1);
+
+    // If activeMatch matches, sync its highlights list too
+    if (this.state.activeMatch && this.state.activeMatch.id === matchId && this.state.activeMatch.highlights) {
+      const activeIdx = this.state.activeMatch.highlights.findIndex(h => h.id === clipId);
+      if (activeIdx !== -1) {
+        this.state.activeMatch.highlights.splice(activeIdx, 1);
+      }
+    }
+
+    // Revoke any blob URL if present to free memory
+    if (deletedClip && deletedClip.videoUrl && deletedClip.videoUrl.startsWith('blob:')) {
+      try {
+        URL.revokeObjectURL(deletedClip.videoUrl);
+      } catch (e) {}
+    }
+
+    this.triggerHaptic('medium');
+    this.saveState();
+    return true;
   }
 
   // Haptic feedback (supported on iOS 13+ & Android)

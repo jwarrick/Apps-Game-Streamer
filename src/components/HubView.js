@@ -162,7 +162,7 @@ export function renderHubView(container, navigate) {
                         <span class="highlight-badge tabular-nums">Set ${h.set} (${h.score})</span>
                         <span class="highlight-label">${h.label || 'Highlight'}</span>
                       </div>
-                      <div style="display: flex; align-items: center; gap: 8px;">
+                      <div style="display: flex; align-items: center; gap: 6px;">
                         ${h.isUploading ? `
                           <span class="highlight-uploading">⏳ Uploading...</span>
                         ` : `
@@ -178,6 +178,15 @@ export function renderHubView(container, navigate) {
                             </svg>
                           </button>
                         `}
+                        <!-- Broadcaster-Only Trashcan Button (Separated with divider to avoid accidental deletion) -->
+                        <button class="btn-trash-clip" data-clip-id="${h.id}" data-match-id="${m.id}" data-label="${h.label || 'Highlight'}" data-score="${h.score || ''}" data-set="${h.set || 1}" title="Delete Highlight from Archive (Broadcaster only)" aria-label="Delete Highlight">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            <line x1="10" y1="11" x2="10" y2="17"></line>
+                            <line x1="14" y1="11" x2="14" y2="17"></line>
+                          </svg>
+                        </button>
                       </div>
                     </div>
                   `).join('')}
@@ -225,14 +234,22 @@ export function renderHubView(container, navigate) {
     const btnDrive = container.querySelector('#btn-drive-header');
     if (btnDrive) {
       btnDrive.onclick = () => {
-        const savedUrl = localStorage.getItem('gamestreamer_drive_folder_url');
-        if (savedUrl) {
-          window.open(savedUrl, '_blank');
+        const currentUrl = store.getDriveLocation();
+        const action = confirm(
+          `Google Drive Match Clips Folder:\n${currentUrl}\n\n` +
+          `• Click OK to open your clips folder in Google Drive.\n` +
+          `• Click Cancel to change the Google Drive folder location.`
+        );
+        if (action) {
+          window.open(currentUrl, '_blank');
         } else {
-          const chosen = prompt('Open your Google Drive Match Clips folder:\n(Enter your Google Drive folder link, or click OK to open Google Drive)', 'https://drive.google.com/drive/my-drive');
+          const chosen = prompt(
+            'Enter your Google Drive Match Clips folder link:\n(Clips will be backed up here and preserved across sessions)',
+            currentUrl
+          );
           if (chosen && chosen.trim()) {
-            localStorage.setItem('gamestreamer_drive_folder_url', chosen.trim());
-            window.open(chosen.trim(), '_blank');
+            store.setDriveLocation(chosen.trim());
+            alert(`Google Drive folder saved!\nAll highlights will be backed up to:\n${chosen.trim()}`);
           }
         }
       };
@@ -347,6 +364,46 @@ export function renderHubView(container, navigate) {
         }
       };
     });
+
+    // Highlight Delete button (Broadcaster only: autodetect Google credentials, confirmation dialog)
+    container.querySelectorAll('.btn-trash-clip').forEach(btn => {
+      btn.onclick = async (e) => {
+        e.stopPropagation();
+        const matchId = btn.dataset.matchId;
+        const clipId = btn.dataset.clipId;
+        const label = btn.dataset.label || 'Highlight';
+        const score = btn.dataset.score || '';
+        const setNum = btn.dataset.set || '1';
+
+        // 1. Broadcaster credentials required (autodetected if already signed in, identically to going live)
+        let broadcaster = authService.getUser();
+        if (!broadcaster) {
+          try {
+            broadcaster = await authService.signInWithGoogle();
+          } catch (err) {
+            console.warn('Broadcaster authentication failed or cancelled:', err);
+            return;
+          }
+        }
+
+        if (!broadcaster) {
+          alert('Broadcaster credentials required to delete highlights.');
+          return;
+        }
+
+        // 2. Clear confirmation prompt to prevent accidental deletions
+        const confirmed = window.confirm(
+          `Delete highlight from archive?\n\n` +
+          `• Clip: "${label}" (Set ${setNum}, ${score})\n` +
+          `• Authorized Broadcaster: ${broadcaster.name}\n\n` +
+          `Are you sure you want to permanently delete this highlight?`
+        );
+
+        if (confirmed) {
+          store.deleteHighlight(matchId, clipId);
+        }
+      };
+    });
   }
 
   update();
@@ -444,6 +501,17 @@ function showMatchSetupModal(navigate, user) {
         </div>
       </div>
 
+      <!-- Persisted Google Drive Backup Location -->
+      <div style="margin-top: 14px; padding: 10px 12px; background: rgba(255,255,255,0.04); border-radius: 10px; border: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+        <div style="min-width: 0; flex: 1;">
+          <div style="font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Google Drive Backup Folder</div>
+          <div style="font-size: 12px; color: #fff; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; margin-top: 2px;" id="lbl-drive-setup-target">
+            ${store.getDriveLocation()}
+          </div>
+        </div>
+        <button class="apple-btn" id="btn-edit-drive-setup" style="padding: 4px 10px; font-size: 11px; flex-shrink: 0;" type="button">Change</button>
+      </div>
+
       <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px;">
         <button class="apple-btn" id="btn-cancel-modal">Cancel</button>
         <button class="apple-btn apple-btn-primary" id="btn-confirm-go-live" style="display: inline-flex; align-items: center; gap: 6px;">
@@ -531,6 +599,19 @@ function showMatchSetupModal(navigate, user) {
       txtSetsThem.textContent = setsThem;
     }
   };
+
+  const btnEditDrive = modal.querySelector('#btn-edit-drive-setup');
+  const lblDriveSetupTarget = modal.querySelector('#lbl-drive-setup-target');
+  if (btnEditDrive) {
+    btnEditDrive.onclick = () => {
+      const current = store.getDriveLocation();
+      const chosen = prompt('Enter your Google Drive Match Clips folder link:\n(This persists across sessions so you never have to remember to set it)', current);
+      if (chosen && chosen.trim()) {
+        store.setDriveLocation(chosen.trim());
+        if (lblDriveSetupTarget) lblDriveSetupTarget.textContent = chosen.trim();
+      }
+    };
+  }
 
   if (btnResumeInProgress && unfinishedMatch) {
     btnResumeInProgress.onclick = () => {
