@@ -611,9 +611,9 @@ html, body {
   top: 0;
   right: 0;
   bottom: 0;
-  width: 85%;
-  max-width: 320px;
-  background: rgba(10, 10, 14, 0.88);
+  width: 88%;
+  max-width: 350px;
+  background: rgba(10, 10, 14, 0.90);
   backdrop-filter: blur(28px) saturate(190%);
   border-left: 1px solid var(--border-subtle);
   z-index: 35;
@@ -637,8 +637,8 @@ html, body {
 }
 
 .streamer-drawer-header h3 {
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 17px;
+  font-weight: 700;
 }
 
 .streamer-drawer-messages {
@@ -716,12 +716,17 @@ html, body {
   position: absolute;
   top: 16px;
   left: 16px;
-  border-radius: 14px;
-  padding: 8px 16px;
+  border-radius: 18px;
+  padding: 12px 20px;
+  background: rgba(14, 16, 22, 0.88);
+  backdrop-filter: blur(24px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
   display: flex;
   align-items: center;
   gap: 16px;
   z-index: 10;
+  user-select: none;
 }
 
 .watcher-top-actions {
@@ -730,62 +735,70 @@ html, body {
   right: 16px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   z-index: 10;
 }
 
-/* Chat Sidebar (Resizing style) */
-.watcher-sidebar {
-  width: 320px;
-  height: 100%;
-  border-left: 1px solid var(--border-subtle);
-  background: var(--surface-dark);
+/* Sizeable Backgrounded Circular 'X' Exit Button */
+.btn-exit-circle {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 50%;
+  background: rgba(22, 24, 30, 0.88);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: 700;
   display: flex;
-  flex-direction: column;
-  transition: transform 0.3s var(--ease-spring), width 0.3s var(--ease-spring);
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  user-select: none;
+  pointer-events: auto;
 }
 
-.watcher-sidebar.collapsed {
-  width: 0;
-  overflow: hidden;
-  border-left: none;
+.btn-exit-circle:hover {
+  background: rgba(38, 42, 52, 0.95);
+  border-color: rgba(255, 255, 255, 0.4);
 }
 
-.chat-header {
-  padding: 16px;
-  border-bottom: 1px solid var(--border-subtle);
+.btn-exit-circle:active {
+  transform: scale(0.90);
+  background: rgba(55, 60, 75, 1);
+}
+
+/* Chat Sidebar & Bubbles (Enhanced Legibility for Older Viewers) */
+.watcher-name-bar {
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   justify-content: space-between;
-}
-
-.chat-header h3 {
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.chat-message-list {
-  flex: 1;
-  padding: 16px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  border-top: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .chat-bubble {
-  padding: 8px 12px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.06);
-  font-size: 13px;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 15px; /* Bumped up from 13px for comfortable reading */
+  line-height: 1.45;
   align-self: flex-start;
-  max-width: 85%;
+  max-width: 88%;
 }
 
 .chat-bubble .sender {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  margin-bottom: 2px;
+  font-size: 13px; /* Bumped up from 11px */
+  font-weight: 600;
+  color: #94a3b8;
+  margin-bottom: 3px;
 }
 
 .chat-input-row {

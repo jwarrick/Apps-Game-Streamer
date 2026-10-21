@@ -19,25 +19,29 @@ export function renderWatcherView(container, navigate) {
             <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4" />
           </video>
 
-          <!-- Top-Left Live Score Overlay -->
+          <!-- Top-Left Live Score Overlay (High legibility for older viewers) -->
           <div class="watcher-score-overlay frosted-glass">
-            <span class="live-badge"><span class="pulse-dot"></span> LIVE</span>
-            <div style="display: flex; flex-direction: column;">
-              <span style="font-size: 13px; font-weight: 600;" id="w-opponent">vs. Opponent</span>
-              <span class="tabular-nums" style="font-size: 20px; font-weight: 800;" id="w-score-line">0 - 0</span>
-            </div>
-            <div style="font-size: 12px; color: var(--text-secondary);" id="w-set-info">
-              Set 1 • Sets: 0-0
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span class="live-badge" style="font-size: 13px; font-weight: 700; padding: 3px 9px;"><span class="pulse-dot"></span> LIVE</span>
+                <span style="font-size: 17px; font-weight: 700; color: #ffffff; letter-spacing: 0.2px;" id="w-opponent">vs. Opponent</span>
+              </div>
+              <div style="display: flex; align-items: baseline; gap: 14px; margin-top: 2px;">
+                <span class="tabular-nums" style="font-size: 30px; font-weight: 900; line-height: 1; letter-spacing: 0.5px;" id="w-score-line">0 - 0</span>
+                <span style="font-size: 16px; font-weight: 600; color: #f1f5f9; background: rgba(255, 255, 255, 0.12); padding: 4px 10px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.15);" id="w-set-info">
+                  Set 1 • Sets: 0-0
+                </span>
+              </div>
             </div>
           </div>
 
           <!-- Top-Right Actions -->
           <div class="watcher-top-actions">
-            <button class="apple-btn frosted-glass" id="btn-simulate-cheer" style="font-size: 12px; padding: 6px 12px;" title="Simulate a new comment to test the pulsing drawer tab">
-              🔔 Test Incoming Cheer
+            <button class="apple-btn frosted-glass" id="btn-simulate-cheer" style="font-size: 13px; font-weight: 600; padding: 8px 14px;" title="Simulate a new comment to test the pulsing drawer tab">
+              🔔 Test Cheer
             </button>
-            <button class="apple-btn frosted-glass" id="btn-back-hub" style="font-size: 12px; padding: 6px 12px;">
-              ✕ Exit
+            <button class="btn-exit-circle" id="btn-back-hub" title="Exit to Home" aria-label="Exit">
+              ✕
             </button>
           </div>
         </div>
@@ -53,7 +57,7 @@ export function renderWatcherView(container, navigate) {
       <div class="streamer-chat-drawer" id="streamer-chat-drawer">
         <div class="streamer-drawer-header">
           <h3>Viewer Comments</h3>
-          <button class="apple-btn" id="btn-close-drawer" style="padding: 4px 10px; font-size: 12px;">✕</button>
+          <button class="apple-btn" id="btn-close-drawer" style="padding: 5px 12px; font-size: 14px;">✕</button>
         </div>
 
         <div class="streamer-drawer-messages" id="drawer-chat-list">
@@ -61,12 +65,12 @@ export function renderWatcherView(container, navigate) {
         </div>
 
         <!-- Dictation Status Indicator -->
-        <div class="dictation-status" id="dictation-status" style="display: none; padding: 4px 12px; font-size: 11px; color: var(--accent-gold); background: rgba(0,0,0,0.3); text-align: center;"></div>
+        <div class="dictation-status" id="dictation-status" style="display: none; padding: 6px 14px; font-size: 13px; color: var(--accent-gold); background: rgba(0,0,0,0.35); text-align: center;"></div>
 
         <!-- Viewer Name Setting Tool (The only difference from Broadcaster) -->
-        <div class="watcher-name-bar" style="padding: 8px 14px; font-size: 11px; color: var(--text-secondary); display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border-subtle); background: rgba(255, 255, 255, 0.03);">
-          <span>Posting as: <b id="lbl-viewer-name" style="color: var(--accent-gold);">Family Member</b></span>
-          <button class="apple-btn" id="btn-edit-viewer-name" style="padding: 3px 8px; font-size: 11px;">Change</button>
+        <div class="watcher-name-bar">
+          <span>Posting as: <b id="lbl-viewer-name" style="color: var(--accent-gold); font-size: 14px;">Family Member</b></span>
+          <button class="apple-btn" id="btn-edit-viewer-name" style="padding: 4px 10px; font-size: 12px;">Change</button>
         </div>
 
         <!-- Drawer Input Row with Voice Dictation Microphone -->
@@ -74,8 +78,8 @@ export function renderWatcherView(container, navigate) {
           <button class="apple-btn frosted-glass btn-voice-mic" id="btn-voice-mic" title="Voice-to-Text Dictation">
             🎙️
           </button>
-          <input type="text" class="simple-input" id="input-drawer-msg" placeholder="Cheer or speak a comment..." style="padding: 8px 12px; font-size: 13px;" />
-          <button class="apple-btn apple-btn-primary" id="btn-send-drawer-msg" style="padding: 8px 12px; font-size: 13px;">Send</button>
+          <input type="text" class="simple-input" id="input-drawer-msg" placeholder="Cheer or speak a comment..." style="padding: 10px 14px; font-size: 15px;" />
+          <button class="apple-btn apple-btn-primary" id="btn-send-drawer-msg" style="padding: 10px 16px; font-size: 14px; font-weight: 600;">Send</button>
         </div>
       </div>
     </div>

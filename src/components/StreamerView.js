@@ -78,21 +78,21 @@ export function renderStreamerView(container, navigate) {
       <div class="streamer-chat-drawer" id="streamer-chat-drawer">
         <div class="streamer-drawer-header">
           <h3>Viewer Comments</h3>
-          <button class="apple-btn" id="btn-close-drawer" style="padding: 4px 10px; font-size: 12px;">✕</button>
+          <button class="apple-btn" id="btn-close-drawer" style="padding: 5px 12px; font-size: 14px;">✕</button>
         </div>
 
         <div class="streamer-drawer-messages" id="drawer-chat-list">
           <!-- Comments stream here -->
         </div>
 
-        <div class="dictation-status" id="dictation-status" style="display: none; padding: 4px 12px; font-size: 11px; color: var(--accent-gold); background: rgba(0,0,0,0.3); text-align: center;"></div>
+        <div class="dictation-status" id="dictation-status" style="display: none; padding: 6px 14px; font-size: 13px; color: var(--accent-gold); background: rgba(0,0,0,0.35); text-align: center;"></div>
 
         <div class="streamer-drawer-input-row">
           <button class="apple-btn frosted-glass btn-voice-mic" id="btn-voice-mic" title="Voice-to-Text Dictation">
             🎙️
           </button>
-          <input type="text" class="simple-input" id="input-drawer-msg" placeholder="Speak or type a comment..." style="padding: 8px 12px; font-size: 13px;" />
-          <button class="apple-btn apple-btn-primary" id="btn-send-drawer-msg" style="padding: 8px 12px; font-size: 13px;">Send</button>
+          <input type="text" class="simple-input" id="input-drawer-msg" placeholder="Speak or type a comment..." style="padding: 10px 14px; font-size: 15px;" />
+          <button class="apple-btn apple-btn-primary" id="btn-send-drawer-msg" style="padding: 10px 16px; font-size: 14px; font-weight: 600;">Send</button>
         </div>
       </div>
 
