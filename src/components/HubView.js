@@ -383,7 +383,24 @@ export function renderHubView(container, navigate) {
         );
 
         if (confirmed) {
+          // Clear focus and suppress hover so the row that shifts into this coordinate does not look armed/highlighted
+          if (document.activeElement && typeof document.activeElement.blur === 'function') {
+            document.activeElement.blur();
+          }
+
+          container.classList.add('suppress-trash-hover');
+
           store.deleteHighlight(matchId, clipId);
+
+          const restoreHover = () => {
+            container.classList.remove('suppress-trash-hover');
+            window.removeEventListener('pointermove', restoreHover);
+            window.removeEventListener('mousemove', restoreHover);
+          };
+
+          window.addEventListener('pointermove', restoreHover, { once: true });
+          window.addEventListener('mousemove', restoreHover, { once: true });
+          setTimeout(restoreHover, 800);
         }
       };
     });
