@@ -4,6 +4,7 @@
 // ==========================================================================
 
 import { store } from '../services/store.js';
+import { getBroadcastIcon } from './icons.js';
 
 export function renderWatcherView(container, navigate) {
   let isListeningVoice = false;
@@ -23,7 +24,10 @@ export function renderWatcherView(container, navigate) {
           <div class="watcher-score-overlay frosted-glass">
             <div style="display: flex; flex-direction: column; gap: 4px;">
               <div style="display: flex; align-items: center; gap: 10px;">
-                <span class="live-badge" style="font-size: 13px; font-weight: 700; padding: 3px 9px;"><span class="pulse-dot"></span> LIVE</span>
+                <span class="live-badge" style="font-size: 13px; font-weight: 700; padding: 3px 9px; display: inline-flex; align-items: center; gap: 6px;">
+                  ${getBroadcastIcon(13, 'var(--accent-red)')}
+                  <span>LIVE</span>
+                </span>
                 <span style="font-size: 17px; font-weight: 700; color: #ffffff; letter-spacing: 0.2px;" id="w-opponent">vs. Opponent</span>
               </div>
               <div style="display: flex; align-items: baseline; gap: 14px; margin-top: 2px;">

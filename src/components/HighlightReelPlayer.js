@@ -4,11 +4,16 @@
 // in the top-left, and displays the final match outcome at the end
 // ==========================================================================
 
+import { sortHighlightsChronologically } from '../services/store.js';
+import { getBroadcastIcon } from './icons.js';
+
 export class HighlightReelPlayer {
   constructor(match, onClose) {
     this.match = match;
     this.onClose = onClose;
-    this.clips = (match.highlights || []).filter(h => h.videoUrl || h.driveUrl);
+    // Strictly order highlights chronologically: Set ascending, Total score points ascending
+    const sorted = sortHighlightsChronologically(match.highlights || []);
+    this.clips = sorted.filter(h => h.videoUrl || h.driveUrl);
     this.currentIndex = 0;
     this.isPlaying = true;
     this.currentSpeed = 1.0;
@@ -63,8 +68,8 @@ export class HighlightReelPlayer {
           <div class="watcher-score-overlay frosted-glass reel-score-overlay" id="reel-score-overlay">
             <div style="display: flex; flex-direction: column; gap: 4px;">
               <div style="display: flex; align-items: center; gap: 10px;">
-                <span class="live-badge" style="font-size: 12px; font-weight: 700; padding: 2px 8px; background: rgba(255, 59, 48, 0.2); color: var(--accent-red); border: 1px solid rgba(255, 59, 48, 0.4);">
-                  <span class="pulse-dot"></span> HIGHLIGHT REEL
+                <span class="live-badge" style="font-size: 12px; font-weight: 700; padding: 2px 8px; background: rgba(255, 59, 48, 0.2); color: var(--accent-red); border: 1px solid rgba(255, 59, 48, 0.4); display: inline-flex; align-items: center; gap: 5px;">
+                  ${getBroadcastIcon(13, 'var(--accent-red)')} HIGHLIGHT REEL
                 </span>
                 <span style="font-size: 16px; font-weight: 700; color: #ffffff;" id="reel-overlay-opponent">vs. ${this.match.opponent}</span>
               </div>

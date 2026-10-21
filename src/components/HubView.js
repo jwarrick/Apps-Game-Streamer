@@ -2,11 +2,12 @@
 // HubView: Main Family Hub & Unified Match Archive
 // ==========================================================================
 
-import { store } from '../services/store.js';
+import { store, sortHighlightsChronologically } from '../services/store.js';
 import { ReplayPlayer } from './ReplayPlayer.js';
 import { HighlightReelPlayer } from './HighlightReelPlayer.js';
 import { authService } from '../services/auth.js';
 import { shareHighlightVideo } from '../services/share.js';
+import { getBroadcastIcon } from './icons.js';
 
 export function renderHubView(container, navigate) {
   function update() {
@@ -25,7 +26,10 @@ export function renderHubView(container, navigate) {
           <div style="display: flex; gap: 8px;">
             <button class="apple-btn" id="btn-drive-header" title="Open Google Drive Match Clips Folder">📁 Drive</button>
             <button class="apple-btn" id="btn-watch-header" title="Open Viewer Experience">👀 Watch</button>
-            <button class="apple-btn apple-btn-primary" id="btn-go-live-header">🎥 Go Live</button>
+            <button class="apple-btn apple-btn-primary" id="btn-go-live-header" style="display: inline-flex; align-items: center; gap: 6px;">
+              ${getBroadcastIcon(16, '#ffffff')}
+              <span>Go Live</span>
+            </button>
           </div>
         </header>
 
@@ -33,7 +37,10 @@ export function renderHubView(container, navigate) {
         ${active.isLive ? `
           <div class="live-hero-card frosted-glass">
             <div class="live-hero-header">
-              <span class="live-badge"><span class="pulse-dot"></span> Live Now</span>
+              <span class="live-badge" style="display: inline-flex; align-items: center; gap: 6px;">
+                ${getBroadcastIcon(14, 'var(--accent-red)')}
+                <span>Live Now</span>
+              </span>
               <span class="tabular-nums" style="font-size: 13px; color: var(--text-secondary);">${active.viewers} watching</span>
             </div>
 
@@ -135,11 +142,11 @@ export function renderHubView(container, navigate) {
                   </div>
                 </div>
 
-                <!-- Chronological Flat List of Highlights -->
+                <!-- Chronological Flat List of Highlights (Ordered by Set & Total Score) -->
                 <div class="highlight-sublist" id="sublist-${m.id}">
                   ${m.highlights.length === 0 ? `
                     <div style="font-size: 13px; color: var(--text-tertiary); padding: 8px;">No highlights clipped yet.</div>
-                  ` : m.highlights.map(h => `
+                  ` : sortHighlightsChronologically(m.highlights).map(h => `
                     <div class="highlight-row">
                       <div class="highlight-left">
                         <button class="btn-star-clip ${h.isStarred ? 'starred' : ''}" data-clip-id="${h.id}" data-match-id="${m.id}" title="${h.isStarred ? 'Starred highlight (Click to unstar)' : 'Star this highlight'}" aria-label="Star highlight">
@@ -341,7 +348,10 @@ function showMatchSetupModal(navigate, user) {
 
       <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px;">
         <button class="apple-btn" id="btn-cancel-modal">Cancel</button>
-        <button class="apple-btn apple-btn-primary" id="btn-confirm-go-live">Start Stream 🎥</button>
+        <button class="apple-btn apple-btn-primary" id="btn-confirm-go-live" style="display: inline-flex; align-items: center; gap: 6px;">
+          ${getBroadcastIcon(16, '#ffffff')}
+          <span>Start Stream</span>
+        </button>
       </div>
     </div>
   `;

@@ -4,6 +4,7 @@
 // ==========================================================================
 
 import { store } from '../services/store.js';
+import { getBroadcastIcon } from './icons.js';
 
 export function renderStreamerView(container, navigate) {
   let mediaStream = null;
@@ -32,7 +33,7 @@ export function renderStreamerView(container, navigate) {
       <header class="streamer-top-bar">
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="streamer-pill frosted-glass tabular-nums" style="display: flex; align-items: center; gap: 6px;">
-            <span class="pulse-dot"></span>
+            ${getBroadcastIcon(13, 'var(--accent-red)')}
             <span>LIVE</span>
             <span id="txt-viewer-count" style="color: var(--text-secondary);">(3)</span>
           </div>

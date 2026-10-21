@@ -4,6 +4,39 @@
 
 const STORAGE_KEY = 'gamestreamer_state_v1';
 
+// Parse total score points (e.g. "14 - 12" -> 26 points)
+export function parseScoreTotal(scoreStr) {
+  if (!scoreStr) return 0;
+  const nums = String(scoreStr).match(/\d+/g);
+  if (!nums) return 0;
+  if (nums.length >= 2) {
+    return (parseInt(nums[0], 10) || 0) + (parseInt(nums[1], 10) || 0);
+  }
+  return parseInt(nums[0], 10) || 0;
+}
+
+// Order highlights strictly chronologically: 1. Set ascending, 2. Total score ascending, 3. Timestamp
+export function sortHighlightsChronologically(highlights = []) {
+  return [...highlights].sort((a, b) => {
+    // 1. Set number ascending
+    const setA = parseInt(a.set, 10) || 1;
+    const setB = parseInt(b.set, 10) || 1;
+    if (setA !== setB) {
+      return setA - setB;
+    }
+
+    // 2. Total points scored ascending
+    const totalA = parseScoreTotal(a.score);
+    const totalB = parseScoreTotal(b.score);
+    if (totalA !== totalB) {
+      return totalA - totalB;
+    }
+
+    // 3. Fallback to timestamp ascending
+    return (a.timestamp || 0) - (b.timestamp || 0);
+  });
+}
+
 // Initial state with realistic demo matches so the app is immediately beautiful and testable
 const DEFAULT_STATE = {
   activeMatch: {
@@ -176,8 +209,9 @@ class GameStore {
             merged.activeMatch.setsThem = 0;
             merged.activeMatch.currentSet = 1;
           }
-          // Ensure all matches and clips have archive & drive properties
+          // Ensure all matches and clips have archive & drive properties, and sort highlights chronologically
           for (const match of (merged.matches || [])) {
+            match.highlights = sortHighlightsChronologically(match.highlights || []);
             if (typeof match.isArchived === 'undefined') {
               match.isArchived = false;
             }
@@ -407,6 +441,7 @@ class GameStore {
     }
 
     matchEntry.highlights.push(newClip);
+    matchEntry.highlights = sortHighlightsChronologically(matchEntry.highlights);
     this.triggerHaptic('double');
     this.saveState();
 
