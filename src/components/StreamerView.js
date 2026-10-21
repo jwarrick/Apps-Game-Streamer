@@ -1,5 +1,6 @@
 // ==========================================================================
-// StreamerView: iPhone Camera Experience with Split-Screen Gestures
+// StreamerView: iPhone Camera Experience with Split Gestures, Corner Scores,
+// Highlight Pill Picker, and Slide-Out Comment Drawer
 // ==========================================================================
 
 import { store } from '../services/store.js';
@@ -9,7 +10,7 @@ export function renderStreamerView(container, navigate) {
   let wakeLock = null;
   let isListeningVoice = false;
   let speechRecognition = null;
-  let cheerDrawerOpen = false;
+  let lastSeenMessageCount = store.getState().chat.length;
 
   container.innerHTML = `
     <div class="streamer-container" id="streamer-root">
@@ -47,14 +48,12 @@ export function renderStreamerView(container, navigate) {
         </button>
       </header>
 
-      <!-- Bottom Score Row with Midline Swap Button -->
+      <!-- Bottom Score Row (No Boxes, Clean Text, Scores in Outer Corners) -->
       <footer class="streamer-bottom-bar">
-        <!-- Left Team Card -->
-        <div class="streamer-score-card frosted-glass" id="card-left">
-          <div>
-            <div class="score-team-label" id="lbl-team-left">US</div>
-            <div class="score-digit tabular-nums" id="digit-left">18</div>
-          </div>
+        <!-- Left Corner: <score> <name> -->
+        <div class="score-side-left" id="side-left">
+          <span class="score-digit tabular-nums" id="digit-left">18</span>
+          <span class="score-team-label" id="lbl-team-left">US</span>
         </div>
 
         <!-- Midline Swap Sides Button -->
@@ -62,38 +61,62 @@ export function renderStreamerView(container, navigate) {
           ⇄
         </button>
 
-        <!-- Right Team Card -->
-        <div class="streamer-score-card frosted-glass" id="card-right">
-          <div style="text-align: right;">
-            <div class="score-team-label" id="lbl-team-right">THEM</div>
-            <div class="score-digit tabular-nums" id="digit-right">16</div>
-          </div>
+        <!-- Right Corner: <name> <score> -->
+        <div class="score-side-right" id="side-right">
+          <span class="score-team-label" id="lbl-team-right">LINCOLN</span>
+          <span class="score-digit tabular-nums" id="digit-right">16</span>
         </div>
       </footer>
 
-      <!-- Expandable (+) Cheer Drawer & Voice Mic -->
-      <div class="streamer-cheer-shelf">
-        <div class="cheer-pill-list" id="cheer-drawer" style="display: none;">
-          <button class="apple-btn btn-cheer-pill" data-cheer="⛏️ Amazing Dig">⛏️ Amazing Dig</button>
-          <button class="apple-btn btn-cheer-pill" data-cheer="💣 Crazy Kill">💣 Crazy Kill</button>
-          <button class="apple-btn btn-cheer-pill" data-cheer="🔥 Ace!">🔥 Ace!</button>
-          <button class="apple-btn btn-cheer-pill" data-cheer="💪 Big Block!">💪 Big Block!</button>
-          <button class="apple-btn btn-cheer-pill" data-cheer="🎯 Cool Set">🎯 Cool Set</button>
+      <!-- Broadcaster Comments Edge Tab (Pulsing when unread) -->
+      <div class="streamer-chat-tab" id="chat-edge-tab" title="View Viewer Comments">
+        <span>💬</span>
+        <span id="chat-tab-count"></span>
+      </div>
+
+      <!-- Slide-Out Semi-Transparent Comments Drawer -->
+      <div class="streamer-chat-drawer" id="streamer-chat-drawer">
+        <div class="streamer-drawer-header">
+          <h3>Viewer Comments</h3>
+          <button class="apple-btn" id="btn-close-drawer" style="padding: 4px 10px; font-size: 12px;">✕</button>
         </div>
 
-        <div style="display: flex; gap: 8px;">
-          <button class="apple-btn frosted-glass btn-voice-mic" id="btn-voice-mic" title="Voice-to-Text Comment">
+        <div class="streamer-drawer-messages" id="drawer-chat-list">
+          <!-- Comments stream here -->
+        </div>
+
+        <div class="streamer-drawer-input-row">
+          <button class="apple-btn frosted-glass btn-voice-mic" id="btn-voice-mic" title="Voice-to-Text Dictation">
             🎙️
           </button>
-          <button class="apple-btn frosted-glass btn-plus-cheer" id="btn-toggle-cheer" title="Cheer Pills">
-            +
-          </button>
+          <input type="text" class="simple-input" id="input-drawer-msg" placeholder="Speak or type a comment..." style="padding: 8px 12px; font-size: 13px;" />
+          <button class="apple-btn apple-btn-primary" id="btn-send-drawer-msg" style="padding: 8px 12px; font-size: 13px;">Send</button>
+        </div>
+      </div>
+
+      <!-- Highlight Pill Picker Modal (Appears when ⚡ HIGHLIGHT is pressed) -->
+      <div class="highlight-pill-backdrop" id="highlight-pill-modal" style="display: none;">
+        <div class="highlight-pill-dialog">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <h3 style="font-size: 16px; font-weight: 700;">Select Highlight Type</h3>
+            <button class="apple-btn" id="btn-cancel-highlight" style="padding: 4px 10px; font-size: 12px;">✕</button>
+          </div>
+          <p style="font-size: 12px; color: var(--text-secondary);">Choose a highlight tag to save and label the rally:</p>
+
+          <div class="highlight-pill-grid">
+            <button class="apple-btn btn-highlight-select" data-label="⛏️ Amazing Dig">⛏️ Amazing Dig</button>
+            <button class="apple-btn btn-highlight-select" data-label="💣 Crazy Kill">💣 Crazy Kill</button>
+            <button class="apple-btn btn-highlight-select" data-label="🔥 Ace!">🔥 Ace!</button>
+            <button class="apple-btn btn-highlight-select" data-label="💪 Big Block!">💪 Big Block!</button>
+            <button class="apple-btn btn-highlight-select" data-label="🎯 Cool Set">🎯 Cool Set</button>
+            <button class="apple-btn btn-highlight-select" data-label="⏱️ Long Point">⏱️ Long Point</button>
+          </div>
         </div>
       </div>
     </div>
   `;
 
-  // DOM Elements
+  // Elements
   const videoElem = container.querySelector('#camera-feed');
   const canvasElem = container.querySelector('#simulated-canvas');
   const zoneLeft = container.querySelector('#zone-left');
@@ -104,17 +127,26 @@ export function renderStreamerView(container, navigate) {
   const btnHighlight = container.querySelector('#btn-trigger-highlight');
   const btnSwap = container.querySelector('#btn-swap-sides');
   const btnEnd = container.querySelector('#btn-end-stream');
-  const btnToggleCheer = container.querySelector('#btn-toggle-cheer');
-  const cheerDrawer = container.querySelector('#cheer-drawer');
-  const btnVoiceMic = container.querySelector('#btn-voice-mic');
 
   const lblTeamLeft = container.querySelector('#lbl-team-left');
   const digitLeft = container.querySelector('#digit-left');
   const lblTeamRight = container.querySelector('#lbl-team-right');
   const digitRight = container.querySelector('#digit-right');
-  const cardLeft = container.querySelector('#card-left');
-  const cardRight = container.querySelector('#card-right');
   const txtViewerCount = container.querySelector('#txt-viewer-count');
+
+  // Highlight modal elements
+  const highlightModal = container.querySelector('#highlight-pill-modal');
+  const btnCancelHighlight = container.querySelector('#btn-cancel-highlight');
+
+  // Chat drawer elements
+  const chatEdgeTab = container.querySelector('#chat-edge-tab');
+  const chatTabCount = container.querySelector('#chat-tab-count');
+  const chatDrawer = container.querySelector('#streamer-chat-drawer');
+  const btnCloseDrawer = container.querySelector('#btn-close-drawer');
+  const drawerChatList = container.querySelector('#drawer-chat-list');
+  const inputDrawerMsg = container.querySelector('#input-drawer-msg');
+  const btnSendDrawerMsg = container.querySelector('#btn-send-drawer-msg');
+  const btnVoiceMic = container.querySelector('#btn-voice-mic');
 
   // --- 1. Camera Initialization & Wake Lock ---
   async function initCamera() {
@@ -133,13 +165,12 @@ export function renderStreamerView(container, navigate) {
       canvasElem.style.display = 'block';
     }
 
-    // Keep screen awake on iPhone
     try {
       if ('wakeLock' in navigator) {
         wakeLock = await navigator.wakeLock.request('screen');
       }
     } catch (e) {
-      console.log('Wake Lock request ignored or unsupported:', e);
+      console.log('Wake Lock ignored or unsupported:', e);
     }
   }
 
@@ -149,21 +180,57 @@ export function renderStreamerView(container, navigate) {
     btnSet.textContent = `SET ${s.currentSet}`;
     txtViewerCount.textContent = `(${s.viewers})`;
 
+    // Score layout:
+    // Left side: <score> <name>
+    // Right side: <name> <score>
+    // Team name "US" for our team, uppercase opponent for their team
+    const teamUs = 'US';
+    const teamThem = (s.opponent || 'THEM').toUpperCase();
+
     if (s.courtSideUs === 'left') {
-      lblTeamLeft.textContent = s.teamUs;
       digitLeft.textContent = s.scoreUs;
-      lblTeamRight.textContent = s.teamThem;
+      lblTeamLeft.textContent = teamUs;
+      lblTeamRight.textContent = teamThem;
       digitRight.textContent = s.scoreThem;
     } else {
-      lblTeamLeft.textContent = s.teamThem;
       digitLeft.textContent = s.scoreThem;
-      lblTeamRight.textContent = s.teamUs;
+      lblTeamLeft.textContent = teamThem;
+      lblTeamRight.textContent = teamUs;
       digitRight.textContent = s.scoreUs;
+    }
+
+    // Update Drawer Comments and Edge Tab
+    const chatList = store.getState().chat;
+    const isDrawerOpen = chatDrawer.classList.contains('open');
+
+    drawerChatList.innerHTML = chatList.map(msg => `
+      <div class="chat-bubble">
+        <div class="sender">${msg.sender} ${msg.score ? `(Set ${msg.set} • ${msg.score})` : ''}</div>
+        <div style="font-weight: ${msg.isCheer ? '700' : '400'}; color: ${msg.isCheer ? 'var(--accent-gold)' : 'inherit'};">
+          ${msg.text}
+        </div>
+      </div>
+    `).join('');
+
+    if (isDrawerOpen) {
+      lastSeenMessageCount = chatList.length;
+      chatEdgeTab.classList.remove('pulsing');
+      chatTabCount.textContent = '';
+      drawerChatList.scrollTop = drawerChatList.scrollHeight;
+    } else {
+      const unread = Math.max(0, chatList.length - lastSeenMessageCount);
+      if (unread > 0) {
+        chatEdgeTab.classList.add('pulsing');
+        chatTabCount.textContent = `${unread}`;
+      } else {
+        chatEdgeTab.classList.remove('pulsing');
+        chatTabCount.textContent = '';
+      }
     }
   }
 
-  // --- 3. Invisible Split Screen Gestures (Tap = +1, Swipe Down = -1) ---
-  function setupGestures(zoneElem, side, hintElem, cardElem) {
+  // --- 3. Split-Screen Touch Gestures (Tap = +1, Swipe Down = -1) ---
+  function setupGestures(zoneElem, side, hintElem) {
     let startY = 0;
     let startTime = 0;
     let isSwiping = false;
@@ -177,32 +244,25 @@ export function renderStreamerView(container, navigate) {
     zoneElem.addEventListener('touchmove', (e) => {
       const currentY = e.touches[0].clientY;
       const diffY = currentY - startY;
-      // If dragged down by 45px or more, consider it a deliberate swipe down (-1)
       if (diffY > 45 && !isSwiping) {
         isSwiping = true;
         store.adjustScore(side, -1);
         flashHint(hintElem, '-1 POINT', 'red');
-        animateScoreCard(cardElem, 'down');
       }
     }, { passive: true });
 
     zoneElem.addEventListener('touchend', (e) => {
       const elapsed = Date.now() - startTime;
-      // If it wasn't a swipe and was a quick tap (< 300ms)
       if (!isSwiping && elapsed < 350) {
         store.adjustScore(side, +1);
         flashHint(hintElem, '+1 POINT', 'white');
-        animateScoreCard(cardElem, 'up');
       }
     });
 
-    // Also handle desktop mouse click for local browser testing
     zoneElem.addEventListener('click', (e) => {
-      // If on desktop without touch
       if (!('ontouchstart' in window)) {
         store.adjustScore(side, +1);
         flashHint(hintElem, '+1 POINT', 'white');
-        animateScoreCard(cardElem, 'up');
       }
     });
   }
@@ -216,15 +276,8 @@ export function renderStreamerView(container, navigate) {
     }, 450);
   }
 
-  function animateScoreCard(card, dir) {
-    card.style.transform = dir === 'up' ? 'scale(1.08)' : 'translateY(6px) scale(0.96)';
-    setTimeout(() => {
-      card.style.transform = 'scale(1)';
-    }, 150);
-  }
-
-  setupGestures(zoneLeft, 'left', hintLeft, cardLeft);
-  setupGestures(zoneRight, 'right', hintRight, cardRight);
+  setupGestures(zoneLeft, 'left', hintLeft);
+  setupGestures(zoneRight, 'right', hintRight);
 
   // --- 4. Controls Listeners ---
   btnSwap.onclick = (e) => {
@@ -235,20 +288,9 @@ export function renderStreamerView(container, navigate) {
   btnSet.onclick = (e) => {
     e.stopPropagation();
     const cur = store.getState().activeMatch;
-    if (confirm(`Finish Set ${cur.currentSet} and advance to Set ${cur.currentSet + 1}? Current points will reset to 0-0.`)) {
+    if (confirm(`Finish Set ${cur.currentSet} and start Set ${cur.currentSet + 1}? Points will reset to 0-0.`)) {
       store.advanceSet();
     }
-  };
-
-  btnHighlight.onclick = (e) => {
-    e.stopPropagation();
-    const clip = store.triggerHighlight();
-    btnHighlight.style.transform = 'scale(1.2)';
-    btnHighlight.textContent = '✓ SAVED!';
-    setTimeout(() => {
-      btnHighlight.style.transform = 'scale(1)';
-      btnHighlight.textContent = '⚡ HIGHLIGHT';
-    }, 1200);
   };
 
   btnEnd.onclick = (e) => {
@@ -260,25 +302,80 @@ export function renderStreamerView(container, navigate) {
     }
   };
 
-  // --- 5. Cheer Drawer & Voice Dictation ---
-  btnToggleCheer.onclick = (e) => {
+  // --- 5. Highlight Pill Picker Trigger ---
+  btnHighlight.onclick = (e) => {
     e.stopPropagation();
-    cheerDrawerOpen = !cheerDrawerOpen;
-    cheerDrawer.style.display = cheerDrawerOpen ? 'flex' : 'none';
-    btnToggleCheer.textContent = cheerDrawerOpen ? '✕' : '+';
+    highlightModal.style.display = 'flex';
   };
 
-  container.querySelectorAll('.btn-cheer-pill').forEach(btn => {
+  btnCancelHighlight.onclick = (e) => {
+    e.stopPropagation();
+    highlightModal.style.display = 'none';
+  };
+
+  highlightModal.onclick = (e) => {
+    if (e.target === highlightModal) {
+      highlightModal.style.display = 'none';
+    }
+  };
+
+  container.querySelectorAll('.btn-highlight-select').forEach(btn => {
     btn.onclick = (e) => {
       e.stopPropagation();
-      const text = btn.dataset.cheer;
-      store.postCheerPill(text);
-      cheerDrawerOpen = false;
-      cheerDrawer.style.display = 'none';
-      btnToggleCheer.textContent = '+';
-      flashHint(hintLeft, text, 'gold');
+      const label = btn.dataset.label;
+      store.triggerHighlight(label);
+      highlightModal.style.display = 'none';
+
+      btnHighlight.style.transform = 'scale(1.15)';
+      btnHighlight.textContent = '✓ SAVED!';
+      flashHint(hintLeft, label, 'gold');
+      setTimeout(() => {
+        btnHighlight.style.transform = 'scale(1)';
+        btnHighlight.textContent = '⚡ HIGHLIGHT';
+      }, 1200);
     };
   });
+
+  // --- 6. Broadcaster Chat Drawer & Voice-to-Text ---
+  function openDrawer() {
+    chatDrawer.classList.add('open');
+    lastSeenMessageCount = store.getState().chat.length;
+    chatEdgeTab.classList.remove('pulsing');
+    chatTabCount.textContent = '';
+    drawerChatList.scrollTop = drawerChatList.scrollHeight;
+  }
+
+  function closeDrawer() {
+    chatDrawer.classList.remove('open');
+    lastSeenMessageCount = store.getState().chat.length;
+  }
+
+  chatEdgeTab.onclick = (e) => {
+    e.stopPropagation();
+    if (chatDrawer.classList.contains('open')) {
+      closeDrawer();
+    } else {
+      openDrawer();
+    }
+  };
+
+  btnCloseDrawer.onclick = (e) => {
+    e.stopPropagation();
+    closeDrawer();
+  };
+
+  function sendBroadcasterMessage() {
+    const text = inputDrawerMsg.value.trim();
+    if (!text) return;
+    store.postChatMessage('Broadcaster', text);
+    inputDrawerMsg.value = '';
+    drawerChatList.scrollTop = drawerChatList.scrollHeight;
+  }
+
+  btnSendDrawerMsg.onclick = sendBroadcasterMessage;
+  inputDrawerMsg.onkeydown = (e) => {
+    if (e.key === 'Enter') sendBroadcasterMessage();
+  };
 
   // Web Speech API Voice-to-Text
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -291,7 +388,8 @@ export function renderStreamerView(container, navigate) {
     speechRecognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript;
       if (transcript) {
-        store.postChatMessage('Broadcaster', transcript);
+        inputDrawerMsg.value = transcript;
+        sendBroadcasterMessage();
         flashHint(hintLeft, `"${transcript}"`, 'white');
       }
     };
@@ -316,10 +414,10 @@ export function renderStreamerView(container, navigate) {
       }
     };
   } else {
-    btnVoiceMic.style.display = 'none'; // Not supported in this browser
+    btnVoiceMic.style.display = 'none';
   }
 
-  // --- 6. Cleanup on route exit ---
+  // --- 7. Cleanup ---
   function cleanup() {
     if (mediaStream) {
       mediaStream.getTracks().forEach(t => t.stop());

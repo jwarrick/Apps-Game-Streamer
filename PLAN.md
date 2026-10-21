@@ -51,7 +51,7 @@
 
 ```
 ┌────────────────────────────────────────────────────────┐
-│ 🏐 Wildcats GameStreamer             [🎥 Go Live] (PIN)│
+│ 🏐 Game Streamer                      [🎥 Go Live]     │
 ├────────────────────────────────────────────────────────┤
 │                                                        │
 │  🔴 LIVE NOW (Displayed only when active)              │
@@ -72,6 +72,10 @@
 │  ► 📅 Oct 11, 2026 vs. East High      [Won 2-0] 4 Clips│
 └────────────────────────────────────────────────────────┘
 ```
+
+### Broadcaster vs. Viewer Access
+- **Viewers (Family)**: **Zero Logins, Zero Barriers**. They simply open the permanent link, tap "Watch Live" (or browse past highlights), and enjoy.
+- **Broadcaster (You)**: Tapping **`[🎥 Go Live]`** triggers **direct Google Sign-In / Passkey verification** automatically. There are no PINs or extra menus. Once recognized, it prompts for the Opponent name and drops you right into camera streaming mode.
 
 ### Highlights Organization
 1. **Match Level (Top Level)**:

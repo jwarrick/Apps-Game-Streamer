@@ -11,8 +11,8 @@ const DEFAULT_STATE = {
     isLive: false,
     date: 'Today',
     opponent: 'Lincoln High',
-    teamUs: 'Wildcats',
-    teamThem: 'Lincoln',
+    teamUs: 'US',
+    teamThem: 'LINCOLN',
     courtSideUs: 'left', // 'left' or 'right'
     scoreUs: 18,
     scoreThem: 16,
@@ -208,10 +208,10 @@ class GameStore {
 
   // --- Highlights Engine ---
 
-  triggerHighlight(videoBlobOrUrl = null) {
+  triggerHighlight(chosenLabel = null, videoBlobOrUrl = null) {
     const m = this.state.activeMatch;
     const cheer = this.state.recentCheerPill;
-    const label = cheer ? cheer.text : 'Highlight';
+    const label = chosenLabel || (cheer ? cheer.text : 'Highlight');
 
     const newClip = {
       id: 'h_' + Date.now(),
@@ -222,6 +222,17 @@ class GameStore {
       isUploading: true,
       timestamp: Date.now()
     };
+
+    // Auto-post highlight pill to chat so viewers see it live
+    this.state.chat.push({
+      id: 'c_' + Date.now(),
+      sender: 'Broadcaster',
+      text: `⚡ Highlight: ${label}`,
+      set: m.currentSet,
+      score: `${m.scoreUs} - ${m.scoreThem}`,
+      timestamp: Date.now(),
+      isCheer: true
+    });
 
     // Find current active match in matches list or add it
     let matchEntry = this.state.matches.find(item => item.id === m.id);
@@ -294,7 +305,10 @@ class GameStore {
   // --- Streamer Lifecycle ---
 
   startBroadcast(opponentName = 'Opponent') {
+    const oppUpper = (opponentName || 'OPPONENT').toUpperCase();
     this.state.activeMatch.opponent = opponentName;
+    this.state.activeMatch.teamUs = 'US';
+    this.state.activeMatch.teamThem = oppUpper;
     this.state.activeMatch.isLive = true;
     this.state.activeMatch.date = 'Today';
     this.state.activeMatch.scoreUs = 0;
