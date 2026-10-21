@@ -4,6 +4,7 @@
 
 import { store } from '../services/store.js';
 import { ReplayPlayer } from './ReplayPlayer.js';
+import { HighlightReelPlayer } from './HighlightReelPlayer.js';
 import { authService } from '../services/auth.js';
 import { shareHighlightVideo } from '../services/share.js';
 
@@ -110,6 +111,12 @@ export function renderHubView(container, navigate) {
                     </div>
                   </div>
                   <div style="display: flex; align-items: center; gap: 8px;">
+                    ${(m.highlights && m.highlights.length > 0) ? `
+                      <button class="apple-btn btn-play-reel" data-match-id="${m.id}" title="Watch continuous YouTube-style highlight reel with live score overlay">
+                        <span>▶</span> <span>Reel (${m.highlights.length})</span>
+                      </button>
+                    ` : ''}
+
                     ${m.isArchived ? `
                       <span class="match-archive-badge" title="Server copies deleted; playing via Google Drive">📦 Drive Archived</span>
                     ` : (!m.isLive ? `
@@ -135,6 +142,9 @@ export function renderHubView(container, navigate) {
                   ` : m.highlights.map(h => `
                     <div class="highlight-row">
                       <div class="highlight-left">
+                        <button class="btn-star-clip ${h.isStarred ? 'starred' : ''}" data-clip-id="${h.id}" data-match-id="${m.id}" title="${h.isStarred ? 'Starred highlight (Click to unstar)' : 'Star this highlight'}" aria-label="Star highlight">
+                          ${h.isStarred ? '★' : '☆'}
+                        </button>
                         <span class="highlight-badge tabular-nums">Set ${h.set} (${h.score})</span>
                         <span class="highlight-label">${h.label || 'Highlight'}</span>
                       </div>
@@ -247,6 +257,31 @@ export function renderHubView(container, navigate) {
           if (clip) {
             new ReplayPlayer(clip);
           }
+        }
+      };
+    });
+
+    // Highlight Star / Favorite button (on the very left of each highlight row)
+    container.querySelectorAll('.btn-star-clip').forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const matchId = btn.dataset.matchId;
+        const clipId = btn.dataset.clipId;
+        const isStarred = store.toggleStarHighlight(matchId, clipId);
+        btn.classList.toggle('starred', isStarred);
+        btn.innerHTML = isStarred ? '★' : '☆';
+        btn.title = isStarred ? 'Starred highlight (Click to unstar)' : 'Star this highlight';
+      };
+    });
+
+    // Play full match highlight reel (YouTube-style continuous highlights with live score overlay)
+    container.querySelectorAll('.btn-play-reel').forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const matchId = btn.dataset.matchId;
+        const match = state.matches.find(m => m.id === matchId);
+        if (match && match.highlights && match.highlights.length > 0) {
+          new HighlightReelPlayer(match);
         }
       };
     });

@@ -45,6 +45,7 @@ const DEFAULT_STATE = {
           driveUrl: 'https://drive.google.com/file/d/drive_h_1/view',
           fileSizeBytes: 3400000,
           isUploading: false,
+          isStarred: true, // Starred by default so user sees gold star!
           timestamp: Date.now() - 1800000
         },
         {
@@ -416,6 +417,18 @@ class GameStore {
     }, 4000);
 
     return newClip;
+  }
+
+  toggleStarHighlight(matchId, clipId) {
+    const match = this.state.matches.find(m => m.id === matchId);
+    if (!match) return false;
+    const clip = (match.highlights || []).find(c => c.id === clipId);
+    if (!clip) return false;
+
+    clip.isStarred = !clip.isStarred;
+    this.triggerHaptic('light');
+    this.saveState();
+    return clip.isStarred;
   }
 
   // --- Chat & Cheer Drawer ---

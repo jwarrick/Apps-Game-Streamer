@@ -448,7 +448,67 @@ body {
 .highlight-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+}
+
+.btn-star-clip {
+  background: transparent;
+  border: none;
+  font-size: 19px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), color 0.15s ease, filter 0.2s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.btn-star-clip:hover {
+  color: rgba(255, 255, 255, 0.7);
+  transform: scale(1.2);
+}
+
+.btn-star-clip:active {
+  transform: scale(0.85);
+}
+
+.btn-star-clip.starred {
+  color: var(--accent-gold);
+  filter: drop-shadow(0 0 6px rgba(255, 214, 10, 0.6));
+  animation: starPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes starPop {
+  0% { transform: scale(0.7); }
+  50% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+
+.btn-play-reel {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: linear-gradient(135deg, #FF3B30, #FF2D55);
+  box-shadow: 0 2px 8px rgba(255, 59, 48, 0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.btn-play-reel:hover {
+  transform: scale(1.04);
+  box-shadow: 0 4px 14px rgba(255, 59, 48, 0.45);
+}
+
+.btn-play-reel:active {
+  transform: scale(0.96);
 }
 
 .highlight-badge {
@@ -1190,3 +1250,274 @@ body {
 .simple-input:focus {
   border-color: var(--accent-blue);
 }
+
+/* ==========================================================================
+   Continuous Highlight Reel Player (YouTube / Story Style)
+   ========================================================================== */
+
+.reel-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.reel-player-container {
+  width: 100%;
+  max-width: 820px;
+  height: 100%;
+  max-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: #000;
+}
+
+@media (min-width: 768px) {
+  .reel-player-container {
+    max-height: 88vh;
+    border-radius: 24px;
+    border: 1px solid var(--border-active);
+    box-shadow: 0 32px 80px rgba(0, 0, 0, 0.85);
+    overflow: hidden;
+  }
+}
+
+/* Progress Segments */
+.reel-progress-segments {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  right: 14px;
+  height: 4px;
+  display: flex;
+  gap: 6px;
+  z-index: 35;
+}
+
+.reel-segment-bar {
+  flex: 1;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.28);
+  border-radius: 2px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.reel-segment-bar:hover {
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.reel-segment-fill {
+  width: 0%;
+  height: 100%;
+  background: #ffffff;
+  border-radius: 2px;
+  transition: width 0.1s linear;
+}
+
+/* Header bar */
+.reel-header-bar {
+  position: absolute;
+  top: 24px;
+  left: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 35;
+  pointer-events: none;
+}
+
+.reel-header-bar button,
+.reel-header-bar .reel-counter-badge {
+  pointer-events: auto;
+}
+
+.reel-counter-badge {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(12px);
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.btn-reel-speed {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Video wrapper */
+.reel-video-wrapper {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.reel-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Score overlay on top left */
+.reel-score-overlay {
+  position: absolute;
+  top: 68px;
+  left: 14px;
+  z-index: 25;
+  pointer-events: none;
+}
+
+.reel-clip-badge {
+  font-size: 13px;
+  font-weight: 700;
+  color: #000;
+  background: var(--accent-gold);
+  padding: 3px 9px;
+  border-radius: 8px;
+  letter-spacing: 0.2px;
+  box-shadow: 0 2px 8px rgba(255, 214, 10, 0.4);
+}
+
+/* Tap zones */
+.reel-tap-zone {
+  position: absolute;
+  top: 70px;
+  bottom: 80px;
+  width: 35%;
+  z-index: 20;
+  cursor: pointer;
+}
+
+.reel-tap-zone.left {
+  left: 0;
+}
+
+.reel-tap-zone.right {
+  right: 0;
+}
+
+/* Bottom controls */
+.reel-bottom-bar {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  z-index: 35;
+  background: rgba(20, 20, 24, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: 8px 16px;
+  border-radius: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.reel-nav-btn {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 20px;
+}
+
+.reel-playpause-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 22px;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Final match overlay */
+.reel-final-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.88);
+  padding: 24px;
+  text-align: center;
+  animation: reelFadeIn 0.4s var(--ease-spring);
+}
+
+@keyframes reelFadeIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.reel-trophy-icon {
+  font-size: 64px;
+  margin-bottom: 12px;
+  filter: drop-shadow(0 4px 16px rgba(255, 214, 10, 0.5));
+}
+
+.reel-final-tag {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--accent-gold);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.reel-final-score-line {
+  font-size: 56px;
+  font-weight: 900;
+  letter-spacing: -1px;
+  line-height: 1;
+  color: #fff;
+  margin-bottom: 10px;
+}
+
+.reel-final-matchup-text {
+  font-size: 18px;
+  font-weight: 600;
+  color: #f1f5f9;
+  margin-bottom: 10px;
+}
+
+.reel-final-winner-badge {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent-green);
+  background: rgba(52, 199, 89, 0.15);
+  border: 1px solid rgba(52, 199, 89, 0.3);
+  padding: 6px 16px;
+  border-radius: 20px;
+  margin-bottom: 16px;
+}
+
+.reel-final-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
