@@ -52,7 +52,7 @@ export function renderStreamerView(container, navigate) {
       <footer class="streamer-bottom-bar">
         <!-- Left Corner: <score> <name> -->
         <div class="score-side-left" id="side-left">
-          <span class="score-digit tabular-nums" id="digit-left">18</span>
+          <span class="score-digit tabular-nums" id="digit-left">0</span>
           <span class="score-team-label" id="lbl-team-left">US</span>
         </div>
 
@@ -64,7 +64,7 @@ export function renderStreamerView(container, navigate) {
         <!-- Right Corner: <name> <score> -->
         <div class="score-side-right" id="side-right">
           <span class="score-team-label" id="lbl-team-right">LINCOLN</span>
-          <span class="score-digit tabular-nums" id="digit-right">16</span>
+          <span class="score-digit tabular-nums" id="digit-right">0</span>
         </div>
       </footer>
 
@@ -84,6 +84,8 @@ export function renderStreamerView(container, navigate) {
         <div class="streamer-drawer-messages" id="drawer-chat-list">
           <!-- Comments stream here -->
         </div>
+
+        <div class="dictation-status" id="dictation-status" style="display: none; padding: 4px 12px; font-size: 11px; color: var(--accent-gold); background: rgba(0,0,0,0.3); text-align: center;"></div>
 
         <div class="streamer-drawer-input-row">
           <button class="apple-btn frosted-glass btn-voice-mic" id="btn-voice-mic" title="Voice-to-Text Dictation">
@@ -112,14 +114,16 @@ export function renderStreamerView(container, navigate) {
             <button class="apple-btn btn-highlight-select" data-label="⏱️ Long Point">⏱️ Long Point</button>
           </div>
         </div>
-      <!-- Set Action Modal (Next Set, Match Finished, Cancel) -->
+      </div>
+
+      <!-- Set Action Modal (Next Set, Match Finished, Cancel, Reset) -->
       <div class="highlight-pill-backdrop" id="set-action-modal" style="display: none;">
         <div class="highlight-pill-dialog" style="max-width: 320px;">
           <div style="display: flex; align-items: center; justify-content: space-between;">
             <h3 style="font-size: 16px; font-weight: 700;" id="set-modal-title">Set 1 Options</h3>
             <button class="apple-btn" id="btn-cancel-set-modal" style="padding: 4px 10px; font-size: 12px;">✕</button>
           </div>
-          <p style="font-size: 13px; color: var(--text-secondary);" id="set-modal-score">Current Score: US 25 - 18 LINCOLN</p>
+          <p style="font-size: 13px; color: var(--text-secondary);" id="set-modal-score">Current Score: US 0 - 0 LINCOLN</p>
 
           <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
             <button class="apple-btn apple-btn-primary" id="btn-modal-next-set" style="padding: 12px; font-size: 14px; font-weight: 600;">
@@ -127,6 +131,9 @@ export function renderStreamerView(container, navigate) {
             </button>
             <button class="apple-btn apple-btn-danger" id="btn-modal-finish-match" style="padding: 12px; font-size: 14px; font-weight: 600;">
               🏆 Match Finished
+            </button>
+            <button class="apple-btn" id="btn-modal-reset-set" style="padding: 10px; font-size: 13px; color: var(--accent-gold);">
+              🔄 Reset Set Score to 0 - 0
             </button>
             <button class="apple-btn" id="btn-modal-close-set" style="padding: 10px; font-size: 13px;">
               Cancel
@@ -165,6 +172,7 @@ export function renderStreamerView(container, navigate) {
   const setModalScore = container.querySelector('#set-modal-score');
   const btnModalNextSet = container.querySelector('#btn-modal-next-set');
   const btnModalFinishMatch = container.querySelector('#btn-modal-finish-match');
+  const btnModalResetSet = container.querySelector('#btn-modal-reset-set');
   const btnModalCloseSet = container.querySelector('#btn-modal-close-set');
   const btnCancelSetModal = container.querySelector('#btn-cancel-set-modal');
 
@@ -177,13 +185,14 @@ export function renderStreamerView(container, navigate) {
   const inputDrawerMsg = container.querySelector('#input-drawer-msg');
   const btnSendDrawerMsg = container.querySelector('#btn-send-drawer-msg');
   const btnVoiceMic = container.querySelector('#btn-voice-mic');
+  const dictationStatus = container.querySelector('#dictation-status');
 
   // --- 1. Camera Initialization & Wake Lock ---
   async function initCamera() {
     try {
       mediaStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: true
+        audio: false // audio: false allows SpeechRecognition to access the mic exclusively without iOS Safari audio session contention
       });
       videoElem.srcObject = mediaStream;
       videoElem.style.display = 'block';
@@ -206,6 +215,7 @@ export function renderStreamerView(container, navigate) {
 
   // --- 2. Update UI from Store ---
   function updateUI() {
+    const s = store.getState().activeMatch;
     const isVictory = store.checkSetVictory();
 
     if (isVictory) {
@@ -336,6 +346,12 @@ export function renderStreamerView(container, navigate) {
     setActionModal.style.display = 'none';
   };
 
+  btnModalResetSet.onclick = (e) => {
+    e.stopPropagation();
+    store.resetScores();
+    setActionModal.style.display = 'none';
+  };
+
   btnModalFinishMatch.onclick = (e) => {
     e.stopPropagation();
     store.finishMatch();
@@ -449,35 +465,92 @@ export function renderStreamerView(container, navigate) {
   if (SpeechRecognition) {
     speechRecognition = new SpeechRecognition();
     speechRecognition.continuous = false;
-    speechRecognition.interimResults = false;
+    speechRecognition.interimResults = true;
     speechRecognition.lang = 'en-US';
 
+    speechRecognition.onstart = () => {
+      isListeningVoice = true;
+      btnVoiceMic.classList.add('listening');
+      dictationStatus.style.display = 'block';
+      dictationStatus.textContent = '🎙️ Listening... speak into microphone';
+    };
+
     speechRecognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      if (transcript) {
-        inputDrawerMsg.value = transcript;
-        sendBroadcasterMessage();
-        flashHint(hintLeft, `"${transcript}"`, 'white');
+      let interimTranscript = '';
+      let finalTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+
+      const text = (finalTranscript || interimTranscript).trim();
+      if (text) {
+        inputDrawerMsg.value = text;
+        dictationStatus.style.display = 'block';
+        dictationStatus.textContent = `🗣️ "${text}"`;
+      }
+    };
+
+    speechRecognition.onerror = (event) => {
+      console.warn('Speech recognition error event:', event.error);
+      isListeningVoice = false;
+      btnVoiceMic.classList.remove('listening');
+      dictationStatus.style.display = 'block';
+
+      if (event.error === 'network') {
+        dictationStatus.textContent = '⚠️ Voice server unreachable. (Apple restricts speech recognition on local debug IP / self-signed SSL. Please type directly)';
+      } else if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        dictationStatus.textContent = '⚠️ Mic access denied or Siri/Dictation disabled in iOS Settings.';
+      } else if (event.error === 'no-speech') {
+        dictationStatus.textContent = 'No speech detected. Tap mic to try again or type directly.';
+      } else if (event.error === 'audio-capture') {
+        dictationStatus.textContent = '⚠️ Microphone capture failed. Ensure mic is enabled in Safari.';
+      } else {
+        dictationStatus.textContent = `⚠️ Voice status: ${event.error}. You can type directly.`;
       }
     };
 
     speechRecognition.onend = () => {
       isListeningVoice = false;
       btnVoiceMic.classList.remove('listening');
+      if (inputDrawerMsg.value.trim()) {
+        dictationStatus.style.display = 'block';
+        dictationStatus.textContent = '✓ Speech captured! Tap Send or edit text below.';
+      } else {
+        setTimeout(() => {
+          if (!isListeningVoice && !inputDrawerMsg.value.trim()) {
+            dictationStatus.style.display = 'none';
+          }
+        }, 3500);
+      }
     };
 
     btnVoiceMic.onclick = (e) => {
       e.stopPropagation();
       if (!isListeningVoice) {
         try {
+          dictationStatus.style.display = 'block';
+          dictationStatus.textContent = '🎙️ Initializing microphone...';
           speechRecognition.start();
-          isListeningVoice = true;
-          btnVoiceMic.classList.add('listening');
         } catch (err) {
-          console.warn('Speech recognition error:', err);
+          console.warn('Speech recognition start failed:', err);
+          isListeningVoice = false;
+          btnVoiceMic.classList.remove('listening');
+          dictationStatus.style.display = 'block';
+          dictationStatus.textContent = '⚠️ Could not start voice recognition. Please type below.';
         }
       } else {
-        speechRecognition.stop();
+        try {
+          speechRecognition.stop();
+        } catch (err) {
+          try { speechRecognition.abort(); } catch (e2) {}
+        }
+        isListeningVoice = false;
+        btnVoiceMic.classList.remove('listening');
       }
     };
   } else {

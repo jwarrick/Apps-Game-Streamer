@@ -14,13 +14,13 @@ const DEFAULT_STATE = {
     teamUs: 'US',
     teamThem: 'LINCOLN',
     courtSideUs: 'left', // 'left' or 'right'
-    scoreUs: 18,
-    scoreThem: 16,
-    setsUs: 1,
+    scoreUs: 0,
+    scoreThem: 0,
+    setsUs: 0,
     setsThem: 0,
-    currentSet: 2,
-    lastScoreTimestamp: Date.now() - 15000,
-    viewers: 3
+    currentSet: 1,
+    lastScoreTimestamp: Date.now(),
+    viewers: 1
   },
   matches: [
     {
@@ -139,9 +139,21 @@ class GameStore {
 
   loadState() {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        return { ...DEFAULT_STATE, ...JSON.parse(saved) };
+      if (typeof localStorage !== 'undefined') {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          const merged = { ...DEFAULT_STATE, ...parsed };
+          // If not actively streaming live, ensure score starts at 0 - 0
+          if (merged.activeMatch && !merged.activeMatch.isLive) {
+            merged.activeMatch.scoreUs = 0;
+            merged.activeMatch.scoreThem = 0;
+            merged.activeMatch.setsUs = 0;
+            merged.activeMatch.setsThem = 0;
+            merged.activeMatch.currentSet = 1;
+          }
+          return merged;
+        }
       }
     } catch (e) {
       console.warn('Could not load stored state, using defaults:', e);
@@ -151,7 +163,9 @@ class GameStore {
 
   saveState() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+      }
     } catch (e) {
       console.warn('Could not save state to localStorage:', e);
     }
@@ -179,14 +193,22 @@ class GameStore {
   adjustScore(side, delta) {
     const isUs = (this.state.activeMatch.courtSideUs === side);
     if (isUs) {
-      const next = Math.max(0, this.state.activeMatch.scoreUs + delta);
+      const next = Math.max(0, Number(this.state.activeMatch.scoreUs || 0) + delta);
       this.state.activeMatch.scoreUs = next;
     } else {
-      const next = Math.max(0, this.state.activeMatch.scoreThem + delta);
+      const next = Math.max(0, Number(this.state.activeMatch.scoreThem || 0) + delta);
       this.state.activeMatch.scoreThem = next;
     }
     this.state.activeMatch.lastScoreTimestamp = Date.now();
     this.triggerHaptic(delta > 0 ? 'light' : 'double');
+    this.saveState();
+  }
+
+  resetScores() {
+    this.state.activeMatch.scoreUs = 0;
+    this.state.activeMatch.scoreThem = 0;
+    this.state.activeMatch.lastScoreTimestamp = Date.now();
+    this.triggerHaptic('medium');
     this.saveState();
   }
 
