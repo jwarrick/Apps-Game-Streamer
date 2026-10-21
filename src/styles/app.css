@@ -492,6 +492,9 @@ html, body {
 }
 
 .btn-swap-sides {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   width: 44px;
   height: 44px;
   border-radius: 50%;
@@ -499,6 +502,7 @@ html, body {
   padding: 0;
   pointer-events: auto;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+  z-index: 10;
 }
 
 /* Highlight Pill Picker Popover */
