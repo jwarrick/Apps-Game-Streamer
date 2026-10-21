@@ -3,17 +3,15 @@
 // Saves to iOS Photos / Camera Roll via Web Share API, or to computer Downloads folder
 // ==========================================================================
 
-export async function downloadHighlightVideo(clip, buttonElement = null) {
+export async function shareHighlightVideo(clip, buttonElement = null) {
   if (!clip || !clip.videoUrl) return;
 
   const cleanLabel = (clip.label || 'Highlight').replace(/[^a-zA-Z0-9]/g, '_');
   const cleanScore = (clip.score || '0-0').replace(/\s+/g, '');
   const filename = `Volleyball_${cleanLabel}_Set${clip.set || 1}_${cleanScore}.mp4`;
 
-  let originalHtml = '';
   if (buttonElement) {
-    originalHtml = buttonElement.innerHTML;
-    buttonElement.innerHTML = '⏳';
+    buttonElement.classList.add('working');
     buttonElement.style.pointerEvents = 'none';
   }
 
@@ -65,8 +63,11 @@ export async function downloadHighlightVideo(clip, buttonElement = null) {
     setTimeout(() => document.body.removeChild(a), 800);
   } finally {
     if (buttonElement) {
-      buttonElement.innerHTML = originalHtml;
+      buttonElement.classList.remove('working');
       buttonElement.style.pointerEvents = 'auto';
     }
   }
 }
+
+// Backwards-compatible alias
+export const downloadHighlightVideo = shareHighlightVideo;

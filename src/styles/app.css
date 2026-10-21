@@ -359,6 +359,7 @@ html, body {
   justify-content: center;
 }
 
+.btn-share-clip,
 .btn-download-clip {
   width: 32px;
   height: 32px;
@@ -373,17 +374,32 @@ html, body {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid var(--border-subtle);
   cursor: pointer;
-  transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+  transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
+.btn-share-clip:hover,
 .btn-download-clip:hover {
   color: #ffffff;
   background: rgba(255, 255, 255, 0.18);
   border-color: rgba(255, 255, 255, 0.3);
 }
 
+.btn-share-clip:active,
 .btn-download-clip:active {
   transform: scale(0.92);
+}
+
+.btn-share-clip.working,
+.btn-download-clip.working {
+  background: rgba(255, 214, 10, 0.25) !important;
+  border-color: var(--accent-gold) !important;
+  color: var(--accent-gold) !important;
+  animation: workingPulse 0.8s infinite alternate ease-in-out;
+}
+
+@keyframes workingPulse {
+  0% { transform: scale(1); opacity: 0.7; }
+  100% { transform: scale(1.08); opacity: 1; }
 }
 
 /* ==========================================================================

@@ -21,6 +21,7 @@ export function renderHubView(container, navigate) {
             <h1>Game Streamer</h1>
           </div>
           <div style="display: flex; gap: 8px;">
+            <button class="apple-btn" id="btn-drive-header" title="Open Google Drive Match Clips Folder">📁 Drive</button>
             <button class="apple-btn" id="btn-watch-header" title="Open Viewer Experience">👀 Watch</button>
             <button class="apple-btn apple-btn-primary" id="btn-go-live-header">🎥 Go Live</button>
           </div>
@@ -110,11 +111,11 @@ export function renderHubView(container, navigate) {
                           <span class="highlight-uploading">⏳ Uploading...</span>
                         ` : `
                           <button class="apple-btn btn-play-clip" data-clip-id="${h.id}" data-match-id="${m.id}" title="Watch Highlight Replay">▶</button>
-                          <button class="btn-download-clip" data-clip-id="${h.id}" data-match-id="${m.id}" title="Save to Photos / Download" aria-label="Download Highlight">
+                          <button class="btn-share-clip" data-clip-id="${h.id}" data-match-id="${m.id}" title="Share Highlight (Text, AirDrop, or Save to Photos)" aria-label="Share Highlight">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
-                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                              <polyline points="7 10 12 15 17 10"></polyline>
-                              <line x1="12" y1="15" x2="12" y2="3"></line>
+                              <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+                              <polyline points="16 6 12 2 8 6"></polyline>
+                              <line x1="12" y1="2" x2="12" y2="15"></line>
                             </svg>
                           </button>
                         `}
@@ -162,6 +163,22 @@ export function renderHubView(container, navigate) {
     const btnWatchHeader = container.querySelector('#btn-watch-header');
     if (btnWatchHeader) btnWatchHeader.onclick = openWatcher;
 
+    const btnDrive = container.querySelector('#btn-drive-header');
+    if (btnDrive) {
+      btnDrive.onclick = () => {
+        const savedUrl = localStorage.getItem('gamestreamer_drive_folder_url');
+        if (savedUrl) {
+          window.open(savedUrl, '_blank');
+        } else {
+          const chosen = prompt('Open your Google Drive Match Clips folder:\n(Enter your Google Drive folder link, or click OK to open Google Drive)', 'https://drive.google.com/drive/my-drive');
+          if (chosen && chosen.trim()) {
+            localStorage.setItem('gamestreamer_drive_folder_url', chosen.trim());
+            window.open(chosen.trim(), '_blank');
+          }
+        }
+      };
+    }
+
     const btnGoLive = container.querySelector('#btn-go-live-header');
     if (btnGoLive) {
       btnGoLive.onclick = async () => {
@@ -199,8 +216,8 @@ export function renderHubView(container, navigate) {
       };
     });
 
-    // Clip download buttons (Save to Camera Roll / Photos on iOS, Downloads folder on PC)
-    container.querySelectorAll('.btn-download-clip').forEach(btn => {
+    // Clip share buttons (Opens iOS Share sheet with Save Video / Text / AirDrop on iPhone, Downloads folder on PC)
+    container.querySelectorAll('.btn-share-clip, .btn-download-clip').forEach(btn => {
       btn.onclick = (e) => {
         e.stopPropagation();
         const matchId = btn.dataset.matchId;
