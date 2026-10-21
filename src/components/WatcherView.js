@@ -1,20 +1,21 @@
 // ==========================================================================
-// WatcherView: Family Live Video Player with Auto-Resizing Chat Sidebar
+// WatcherView: Family Live Video Player with Overlay Comments Drawer
+// Identical in structure, styling, pulsing tab, and voice mic to Broadcaster
 // ==========================================================================
 
 import { store } from '../services/store.js';
-import { ReplayPlayer } from './ReplayPlayer.js';
 
 export function renderWatcherView(container, navigate) {
-  let isChatOpen = true;
+  let isListeningVoice = false;
+  let speechRecognition = null;
+  let lastSeenMessageCount = store.getState().chat.length;
 
   container.innerHTML = `
     <div class="watcher-container">
-      <!-- Main Video Area (Automatically resizes when sidebar opens) -->
+      <!-- Fullscreen Live Video Area -->
       <div class="watcher-main" id="watcher-main">
         <div class="watcher-video-wrapper">
           <video class="watcher-video" id="live-player" autoplay playsinline muted loop>
-            <!-- Sample high quality volleyball loop for demo testing -->
             <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4" />
           </video>
 
@@ -22,19 +23,16 @@ export function renderWatcherView(container, navigate) {
           <div class="watcher-score-overlay frosted-glass">
             <span class="live-badge"><span class="pulse-dot"></span> LIVE</span>
             <div style="display: flex; flex-direction: column;">
-              <span style="font-size: 13px; font-weight: 600;" id="w-opponent">vs. Lincoln High</span>
-              <span class="tabular-nums" style="font-size: 20px; font-weight: 800;" id="w-score-line">18 - 16</span>
+              <span style="font-size: 13px; font-weight: 600;" id="w-opponent">vs. Opponent</span>
+              <span class="tabular-nums" style="font-size: 20px; font-weight: 800;" id="w-score-line">0 - 0</span>
             </div>
             <div style="font-size: 12px; color: var(--text-secondary);" id="w-set-info">
-              Set 2 • Sets: 1-0
+              Set 1 • Sets: 0-0
             </div>
           </div>
 
           <!-- Top-Right Actions -->
           <div class="watcher-top-actions">
-            <button class="apple-btn frosted-glass" id="btn-toggle-chat">
-              💬 Chat
-            </button>
             <button class="apple-btn frosted-glass" id="btn-back-hub">
               ✕ Exit
             </button>
@@ -42,46 +40,63 @@ export function renderWatcherView(container, navigate) {
         </div>
       </div>
 
-      <!-- Resizing Chat Sidebar (Shrinks video rather than overlaying) -->
-      <aside class="watcher-sidebar" id="watcher-sidebar">
-        <div class="chat-header">
-          <h3>Family Cheering</h3>
-          <button class="apple-btn" id="btn-close-sidebar" style="padding: 4px 10px; font-size: 12px;">✕</button>
+      <!-- Family Comments Edge Tab (Pulsing when unread, identical to broadcaster) -->
+      <div class="streamer-chat-tab" id="chat-edge-tab" title="View Comments">
+        <span>💬</span>
+        <span id="chat-tab-count"></span>
+      </div>
+
+      <!-- Slide-Out Semi-Transparent Comments Drawer (Overlays directly on video) -->
+      <div class="streamer-chat-drawer" id="streamer-chat-drawer">
+        <div class="streamer-drawer-header">
+          <h3>Viewer Comments</h3>
+          <button class="apple-btn" id="btn-close-drawer" style="padding: 4px 10px; font-size: 12px;">✕</button>
         </div>
 
-        <div class="chat-message-list" id="chat-messages">
-          <!-- Chat bubbles populated dynamically -->
+        <div class="streamer-drawer-messages" id="drawer-chat-list">
+          <!-- Comments stream here -->
         </div>
 
-        <!-- Viewer Name Tag -->
-        <div style="padding: 6px 14px; font-size: 11px; color: var(--text-secondary); display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border-subtle);">
-          <span>Posting as: <b id="lbl-viewer-name" style="color: #fff;">Family Member</b></span>
-          <button class="apple-btn" id="btn-edit-viewer-name" style="padding: 2px 8px; font-size: 10px;">Change</button>
+        <!-- Dictation Status Indicator -->
+        <div class="dictation-status" id="dictation-status" style="display: none; padding: 4px 12px; font-size: 11px; color: var(--accent-gold); background: rgba(0,0,0,0.3); text-align: center;"></div>
+
+        <!-- Viewer Name Setting Tool (The only difference from Broadcaster) -->
+        <div class="watcher-name-bar" style="padding: 8px 14px; font-size: 11px; color: var(--text-secondary); display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border-subtle); background: rgba(255, 255, 255, 0.03);">
+          <span>Posting as: <b id="lbl-viewer-name" style="color: var(--accent-gold);">Family Member</b></span>
+          <button class="apple-btn" id="btn-edit-viewer-name" style="padding: 3px 8px; font-size: 11px;">Change</button>
         </div>
 
-        <div class="chat-input-row">
-          <input type="text" class="chat-input" id="input-chat-msg" placeholder="Cheer for the team..." />
-          <button class="apple-btn apple-btn-primary" id="btn-send-chat" style="padding: 8px 14px;">Send</button>
+        <!-- Drawer Input Row with Voice Dictation Microphone -->
+        <div class="streamer-drawer-input-row">
+          <button class="apple-btn frosted-glass btn-voice-mic" id="btn-voice-mic" title="Voice-to-Text Dictation">
+            🎙️
+          </button>
+          <input type="text" class="simple-input" id="input-drawer-msg" placeholder="Cheer or speak a comment..." style="padding: 8px 12px; font-size: 13px;" />
+          <button class="apple-btn apple-btn-primary" id="btn-send-drawer-msg" style="padding: 8px 12px; font-size: 13px;">Send</button>
         </div>
-      </aside>
+      </div>
     </div>
   `;
 
   // Elements
-  const sidebar = container.querySelector('#watcher-sidebar');
-  const btnToggleChat = container.querySelector('#btn-toggle-chat');
-  const btnCloseSidebar = container.querySelector('#btn-close-sidebar');
   const btnBackHub = container.querySelector('#btn-back-hub');
-  const chatMessages = container.querySelector('#chat-messages');
-  const inputChatMsg = container.querySelector('#input-chat-msg');
-  const btnSendChat = container.querySelector('#btn-send-chat');
-  const lblViewerName = container.querySelector('#lbl-viewer-name');
-  const btnEditViewerName = container.querySelector('#btn-edit-viewer-name');
-
   const wOpponent = container.querySelector('#w-opponent');
   const wScoreLine = container.querySelector('#w-score-line');
   const wSetInfo = container.querySelector('#w-set-info');
 
+  const chatEdgeTab = container.querySelector('#chat-edge-tab');
+  const chatTabCount = container.querySelector('#chat-tab-count');
+  const chatDrawer = container.querySelector('#streamer-chat-drawer');
+  const btnCloseDrawer = container.querySelector('#btn-close-drawer');
+  const drawerChatList = container.querySelector('#drawer-chat-list');
+  const dictationStatus = container.querySelector('#dictation-status');
+  const lblViewerName = container.querySelector('#lbl-viewer-name');
+  const btnEditViewerName = container.querySelector('#btn-edit-viewer-name');
+  const inputDrawerMsg = container.querySelector('#input-drawer-msg');
+  const btnSendDrawerMsg = container.querySelector('#btn-send-drawer-msg');
+  const btnVoiceMic = container.querySelector('#btn-voice-mic');
+
+  // Viewer Name Storage
   function getViewerName() {
     return localStorage.getItem('gamestreamer_viewer_name') || '';
   }
@@ -93,28 +108,191 @@ export function renderWatcherView(container, navigate) {
     }
   }
 
+  function ensureViewerName() {
+    let name = getViewerName();
+    if (!name) {
+      const chosen = prompt('What is your name for the chat? (e.g. Grandma, Uncle Dave, Mom)', 'Grandma');
+      if (chosen && chosen.trim()) {
+        setViewerName(chosen.trim());
+        name = chosen.trim();
+      } else {
+        name = 'Family Member';
+        setViewerName(name);
+      }
+    }
+    return name;
+  }
+
   const initialName = getViewerName();
   if (initialName) {
     lblViewerName.textContent = initialName;
   }
 
-  btnEditViewerName.onclick = () => {
+  btnEditViewerName.onclick = (e) => {
+    e.stopPropagation();
     const current = getViewerName() || 'Grandma';
-    const chosen = prompt('What is your name for the chat? (e.g. Grandma, Uncle Dave)', current);
-    if (chosen !== null) {
-      setViewerName(chosen);
+    const chosen = prompt('What is your name for the chat? (e.g. Grandma, Uncle Dave, Mom)', current);
+    if (chosen !== null && chosen.trim()) {
+      setViewerName(chosen.trim());
     }
   };
 
+  btnBackHub.onclick = () => navigate('/');
+
+  // --- Drawer Open / Close Logic ---
+  function openDrawer() {
+    chatDrawer.classList.add('open');
+    lastSeenMessageCount = store.getState().chat.length;
+    chatEdgeTab.classList.remove('pulsing');
+    chatTabCount.textContent = '';
+    drawerChatList.scrollTop = drawerChatList.scrollHeight;
+  }
+
+  function closeDrawer() {
+    chatDrawer.classList.remove('open');
+    lastSeenMessageCount = store.getState().chat.length;
+  }
+
+  chatEdgeTab.onclick = (e) => {
+    e.stopPropagation();
+    if (chatDrawer.classList.contains('open')) {
+      closeDrawer();
+    } else {
+      openDrawer();
+    }
+  };
+
+  btnCloseDrawer.onclick = (e) => {
+    e.stopPropagation();
+    closeDrawer();
+  };
+
+  // --- Send Message ---
+  function sendMessage() {
+    const text = inputDrawerMsg.value.trim();
+    if (!text) return;
+
+    const sender = ensureViewerName();
+    store.postChatMessage(sender, text);
+    inputDrawerMsg.value = '';
+    drawerChatList.scrollTop = drawerChatList.scrollHeight;
+  }
+
+  btnSendDrawerMsg.onclick = sendMessage;
+  inputDrawerMsg.onkeydown = (e) => {
+    if (e.key === 'Enter') sendMessage();
+  };
+
+  // --- Web Speech API Voice-to-Text (Identical to Broadcaster) ---
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SpeechRecognition) {
+    speechRecognition = new SpeechRecognition();
+    speechRecognition.continuous = false;
+    speechRecognition.interimResults = true;
+    speechRecognition.lang = 'en-US';
+
+    speechRecognition.onstart = () => {
+      isListeningVoice = true;
+      btnVoiceMic.classList.add('listening');
+      dictationStatus.style.display = 'block';
+      dictationStatus.textContent = '🎙️ Listening... speak into microphone';
+    };
+
+    speechRecognition.onresult = (event) => {
+      let interimTranscript = '';
+      let finalTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+
+      const text = (finalTranscript || interimTranscript).trim();
+      if (text) {
+        inputDrawerMsg.value = text;
+        dictationStatus.style.display = 'block';
+        dictationStatus.textContent = `🗣️ "${text}"`;
+      }
+    };
+
+    speechRecognition.onerror = (event) => {
+      console.warn('Speech recognition error event:', event.error);
+      isListeningVoice = false;
+      btnVoiceMic.classList.remove('listening');
+      dictationStatus.style.display = 'block';
+
+      if (event.error === 'network') {
+        dictationStatus.textContent = '⚠️ Voice server unreachable. (Apple restricts speech recognition on local debug IP / self-signed SSL. Please type directly)';
+      } else if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        dictationStatus.textContent = '⚠️ Mic access denied or Siri/Dictation disabled in iOS Settings.';
+      } else if (event.error === 'no-speech') {
+        dictationStatus.textContent = 'No speech detected. Tap mic to try again or type directly.';
+      } else if (event.error === 'audio-capture') {
+        dictationStatus.textContent = '⚠️ Microphone capture failed. Ensure mic is enabled in Safari.';
+      } else {
+        dictationStatus.textContent = `⚠️ Voice status: ${event.error}. You can type directly.`;
+      }
+    };
+
+    speechRecognition.onend = () => {
+      isListeningVoice = false;
+      btnVoiceMic.classList.remove('listening');
+      if (inputDrawerMsg.value.trim()) {
+        dictationStatus.style.display = 'block';
+        dictationStatus.textContent = '✓ Speech captured! Tap Send or edit text below.';
+      } else {
+        setTimeout(() => {
+          if (!isListeningVoice && !inputDrawerMsg.value.trim()) {
+            dictationStatus.style.display = 'none';
+          }
+        }, 3500);
+      }
+    };
+
+    btnVoiceMic.onclick = (e) => {
+      e.stopPropagation();
+      if (!isListeningVoice) {
+        ensureViewerName();
+        try {
+          dictationStatus.style.display = 'block';
+          dictationStatus.textContent = '🎙️ Initializing microphone...';
+          speechRecognition.start();
+        } catch (err) {
+          console.warn('Speech recognition start failed:', err);
+          isListeningVoice = false;
+          btnVoiceMic.classList.remove('listening');
+          dictationStatus.style.display = 'block';
+          dictationStatus.textContent = '⚠️ Could not start voice recognition. Please type below.';
+        }
+      } else {
+        try {
+          speechRecognition.stop();
+        } catch (err) {
+          try { speechRecognition.abort(); } catch (e2) {}
+        }
+        isListeningVoice = false;
+        btnVoiceMic.classList.remove('listening');
+      }
+    };
+  } else {
+    btnVoiceMic.style.display = 'none';
+  }
+
+  // --- Real-time Updates from Store ---
   function update() {
     const s = store.getState().activeMatch;
     wOpponent.textContent = `vs. ${s.opponent}`;
     wScoreLine.textContent = `${s.scoreUs} - ${s.scoreThem}`;
     wSetInfo.textContent = `Set ${s.currentSet} • Sets: ${s.setsUs}-${s.setsThem}`;
 
-    // Render chat
+    // Render Drawer Comments and Edge Tab
     const chatList = store.getState().chat;
-    chatMessages.innerHTML = chatList.map(msg => `
+    const isDrawerOpen = chatDrawer.classList.contains('open');
+
+    drawerChatList.innerHTML = chatList.map(msg => `
       <div class="chat-bubble">
         <div class="sender">${msg.sender} ${msg.score ? `(Set ${msg.set} • ${msg.score})` : ''}</div>
         <div style="font-weight: ${msg.isCheer ? '700' : '400'}; color: ${msg.isCheer ? 'var(--accent-gold)' : 'inherit'};">
@@ -123,54 +301,30 @@ export function renderWatcherView(container, navigate) {
       </div>
     `).join('');
 
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-  }
-
-  // Toggle chat sidebar (smoothly resizes video container)
-  function toggleSidebar(open) {
-    isChatOpen = open;
-    if (isChatOpen) {
-      sidebar.classList.remove('collapsed');
-      btnToggleChat.style.display = 'none';
+    if (isDrawerOpen) {
+      lastSeenMessageCount = chatList.length;
+      chatEdgeTab.classList.remove('pulsing');
+      chatTabCount.textContent = '';
+      drawerChatList.scrollTop = drawerChatList.scrollHeight;
     } else {
-      sidebar.classList.add('collapsed');
-      btnToggleChat.style.display = 'flex';
-    }
-  }
-
-  btnToggleChat.onclick = () => toggleSidebar(true);
-  btnCloseSidebar.onclick = () => toggleSidebar(false);
-  btnBackHub.onclick = () => navigate('/');
-
-  // Send message
-  function sendMessage() {
-    const text = inputChatMsg.value.trim();
-    if (!text) return;
-
-    let sender = getViewerName();
-    if (!sender) {
-      const chosen = prompt('What is your name for the chat? (e.g. Grandma, Uncle Dave)', 'Grandma');
-      if (chosen && chosen.trim()) {
-        setViewerName(chosen);
-        sender = chosen.trim();
+      const unread = Math.max(0, chatList.length - lastSeenMessageCount);
+      if (unread > 0) {
+        chatEdgeTab.classList.add('pulsing');
+        chatTabCount.textContent = `${unread}`;
       } else {
-        sender = 'Family Viewer';
+        chatEdgeTab.classList.remove('pulsing');
+        chatTabCount.textContent = '';
       }
     }
-
-    store.postChatMessage(sender, text);
-    inputChatMsg.value = '';
   }
-
-  btnSendChat.onclick = sendMessage;
-  inputChatMsg.onkeydown = (e) => {
-    if (e.key === 'Enter') sendMessage();
-  };
 
   update();
   const unsubscribe = store.subscribe(update);
 
   return () => {
+    if (speechRecognition) {
+      try { speechRecognition.abort(); } catch (e) {}
+    }
     unsubscribe();
   };
 }
