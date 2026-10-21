@@ -1,0 +1,5 @@
+Goal: Plan a web app for live streaming video from my iphone at volleyball games to 1-4 family members. Ideally I want this app to be built with free components and require no monthly bills for me to host it. I currently use firebase for one of my apps but am open to other hosting mechanisms. I want the app to allow me to keep score while streaming. Ideally, people should be able to post comments. Also, I'd like the ability to retrospectively save a highlight (e.g., something cool happens, hit a button, and the video starting with the last point change, up until the highlight button is clicked, is saved as a highlight to my phone or to the app database if space isn't an issue, such as a linked google account).
+
+Context: My son plays volleyball and I want family members to be able to watch live, and post comments, and see the live score that I'm keeping, but also see highlights I've marked.
+
+

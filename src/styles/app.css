@@ -1,0 +1,835 @@
+/* ==========================================================================
+   Apple-Inspired Minimalist Design System for GameStreamer
+   ========================================================================== */
+
+:root {
+  --font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --bg-color: #000000;
+  --surface-dark: #121214;
+  --surface-card: rgba(255, 255, 255, 0.05);
+  --surface-glass: rgba(20, 20, 24, 0.65);
+  --surface-glass-light: rgba(255, 255, 255, 0.12);
+  --border-subtle: rgba(255, 255, 255, 0.1);
+  --border-active: rgba(255, 255, 255, 0.25);
+  
+  --text-primary: #FFFFFF;
+  --text-secondary: rgba(255, 255, 255, 0.65);
+  --text-tertiary: rgba(255, 255, 255, 0.4);
+  
+  --accent-red: #FF3B30;
+  --accent-gold: #FFD60A;
+  --accent-blue: #0A84FF;
+  --accent-green: #34C759;
+  
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --blur-glass: blur(24px) saturate(190%);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ==========================================================================
+   Common Utilities & Components
+   ========================================================================== */
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.frosted-glass {
+  background: var(--surface-glass);
+  backdrop-filter: var(--blur-glass);
+  -webkit-backdrop-filter: var(--blur-glass);
+  border: 1px solid var(--border-subtle);
+}
+
+.apple-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--surface-glass-light);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 9999px;
+  font-family: var(--font-family);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: transform 0.15s var(--ease-spring), background 0.15s ease, border-color 0.15s ease;
+  user-select: none;
+}
+
+.apple-btn:active {
+  transform: scale(0.95);
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.apple-btn-primary {
+  background: #FFFFFF;
+  color: #000000;
+  font-weight: 600;
+  border: none;
+}
+
+.apple-btn-primary:active {
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.apple-btn-danger {
+  background: rgba(255, 59, 48, 0.15);
+  color: var(--accent-red);
+  border-color: rgba(255, 59, 48, 0.3);
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  background-color: var(--accent-red);
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: 0 0 10px var(--accent-red);
+  animation: pulse 1.8s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.3); opacity: 1; box-shadow: 0 0 14px var(--accent-red); }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+/* ==========================================================================
+   1. Main Hub View (/)
+   ========================================================================== */
+
+.hub-container {
+  max-width: 680px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 24px 20px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.hub-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+}
+
+.hub-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hub-brand h1 {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+}
+
+.live-hero-card {
+  border-radius: 20px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+}
+
+.live-hero-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--accent-red);
+  background: rgba(255, 59, 48, 0.12);
+  padding: 4px 10px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 59, 48, 0.25);
+}
+
+.live-matchup-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.live-score-strip {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 32px;
+  font-weight: 800;
+}
+
+.live-score-sets {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.btn-watch-live {
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 14px;
+}
+
+.archive-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.archive-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.archive-header h2 {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.match-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.match-card {
+  border-radius: 16px;
+  overflow: hidden;
+  transition: border-color 0.2s ease;
+}
+
+.match-card-header {
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+}
+
+.match-card-header:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.match-info-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.match-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.match-meta {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.match-result-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--surface-glass-light);
+}
+
+.match-result-badge.win {
+  color: var(--accent-green);
+  background: rgba(52, 199, 89, 0.12);
+}
+
+.match-result-badge.live {
+  color: var(--accent-red);
+  background: rgba(255, 59, 48, 0.15);
+}
+
+.highlight-sublist {
+  border-top: 1px solid var(--border-subtle);
+  background: rgba(0, 0, 0, 0.25);
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.highlight-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 10px;
+  border-radius: 10px;
+  transition: background 0.15s ease;
+}
+
+.highlight-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.highlight-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.highlight-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+}
+
+.highlight-label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.highlight-uploading {
+  font-size: 12px;
+  color: var(--accent-gold);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-play-clip {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  padding: 0;
+}
+
+/* ==========================================================================
+   2. Streamer View (/stream)
+   ========================================================================== */
+
+.streamer-container {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #000;
+  overflow: hidden;
+  touch-action: none;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.camera-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+}
+
+/* Split screen gesture zones */
+.split-gesture-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  z-index: 5;
+  pointer-events: auto;
+}
+
+.gesture-zone {
+  flex: 1;
+  height: 100%;
+  position: relative;
+  touch-action: none;
+}
+
+.gesture-zone-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* Top control bar */
+.streamer-top-bar {
+  position: absolute;
+  top: env(safe-area-inset-top, 16px);
+  left: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 20;
+  pointer-events: auto;
+}
+
+.streamer-pill {
+  border-radius: 9999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.btn-highlight {
+  background: var(--accent-gold);
+  color: #000000;
+  font-weight: 700;
+  border: none;
+  box-shadow: 0 4px 16px rgba(255, 214, 10, 0.3);
+}
+
+.btn-highlight:active {
+  transform: scale(0.92);
+  background: #FFE033;
+}
+
+/* Bottom score row */
+.streamer-bottom-bar {
+  position: absolute;
+  bottom: max(env(safe-area-inset-bottom, 20px), 16px);
+  left: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 20;
+  pointer-events: auto;
+}
+
+.streamer-score-card {
+  padding: 12px 20px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 120px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  transition: transform 0.1s var(--ease-spring);
+}
+
+.score-team-label {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.score-digit {
+  font-size: 38px;
+  font-weight: 800;
+  letter-spacing: -1px;
+}
+
+.btn-swap-sides {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  font-size: 18px;
+  padding: 0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+/* (+) Cheer pill shelf */
+.streamer-cheer-shelf {
+  position: absolute;
+  bottom: 100px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  z-index: 30;
+  pointer-events: auto;
+}
+
+.cheer-pill-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(20, 20, 24, 0.85);
+  backdrop-filter: var(--blur-glass);
+  padding: 8px;
+  border-radius: 16px;
+  border: 1px solid var(--border-subtle);
+  animation: slideUp 0.2s var(--ease-spring);
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.btn-cheer-pill {
+  padding: 6px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  justify-content: flex-start;
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+}
+
+.btn-cheer-pill:hover, .btn-cheer-pill:active {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.btn-plus-cheer {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-size: 20px;
+  padding: 0;
+}
+
+/* Voice-to-Text Button */
+.btn-voice-mic {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  padding: 0;
+  font-size: 18px;
+}
+
+.btn-voice-mic.listening {
+  background: var(--accent-red);
+  color: #fff;
+  animation: pulse 1.2s infinite;
+}
+
+/* ==========================================================================
+   3. Watcher View (/watch)
+   ========================================================================== */
+
+.watcher-container {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #000;
+}
+
+.watcher-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+  transition: width 0.3s var(--ease-spring);
+}
+
+.watcher-video-wrapper {
+  flex: 1;
+  background: #000;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.watcher-video {
+  width: 100%;
+  height: 100%;
+  max-height: 100vh;
+  object-fit: contain;
+}
+
+.watcher-score-overlay {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  border-radius: 14px;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  z-index: 10;
+}
+
+.watcher-top-actions {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 10;
+}
+
+/* Chat Sidebar (Resizing style) */
+.watcher-sidebar {
+  width: 320px;
+  height: 100%;
+  border-left: 1px solid var(--border-subtle);
+  background: var(--surface-dark);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s var(--ease-spring), width 0.3s var(--ease-spring);
+}
+
+.watcher-sidebar.collapsed {
+  width: 0;
+  overflow: hidden;
+  border-left: none;
+}
+
+.chat-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chat-header h3 {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.chat-message-list {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chat-bubble {
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 13px;
+  align-self: flex-start;
+  max-width: 85%;
+}
+
+.chat-bubble .sender {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-bottom: 2px;
+}
+
+.chat-input-row {
+  padding: 12px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  gap: 8px;
+}
+
+.chat-input {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-subtle);
+  border-radius: 9999px;
+  color: #fff;
+  padding: 8px 14px;
+  font-size: 14px;
+  outline: none;
+}
+
+.chat-input:focus {
+  border-color: var(--accent-blue);
+}
+
+/* ==========================================================================
+   4. Replay Popover Player (1x, 0.5x, 0.25x Segmented Control)
+   ========================================================================== */
+
+.replay-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(20px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 16px;
+}
+
+.replay-modal {
+  width: 100%;
+  max-width: 640px;
+  background: var(--surface-dark);
+  border: 1px solid var(--border-active);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
+}
+
+.replay-header {
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.replay-header h3 {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.replay-video-box {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+
+.replay-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.replay-controls {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.replay-button-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.replay-actions-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Segmented Speed Controller */
+.speed-toggle-group {
+  display: inline-flex;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  padding: 3px;
+  border: 1px solid var(--border-subtle);
+}
+
+.speed-btn {
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.speed-btn.active {
+  background: #FFFFFF;
+  color: #000000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+/* Modal Simple Form */
+.simple-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(14px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 110;
+  padding: 20px;
+}
+
+.simple-modal {
+  width: 100%;
+  max-width: 400px;
+  background: var(--surface-dark);
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.simple-modal h3 {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.simple-input {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 15px;
+  color: #fff;
+  outline: none;
+}
+
+.simple-input:focus {
+  border-color: var(--accent-blue);
+}
