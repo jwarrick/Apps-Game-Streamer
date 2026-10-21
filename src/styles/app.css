@@ -703,6 +703,8 @@ body {
   height: 100%;
   object-fit: cover;
   z-index: 1;
+  transform-origin: center center;
+  transition: transform 0.08s ease-out;
 }
 
 /* Split screen gesture zones */
@@ -958,6 +960,125 @@ body {
   background: rgba(255, 149, 0, 0.25);
   color: #FF9F0A;
   border: 1px solid rgba(255, 149, 0, 0.7);
+}
+
+/* Broadcaster Camera Zoom Slider on Left Edge */
+.streamer-zoom-control {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(18, 18, 22, 0.72);
+  backdrop-filter: var(--blur-glass);
+  border: 1px solid var(--border-subtle);
+  border-radius: 28px;
+  padding: 8px 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  pointer-events: auto;
+}
+
+.zoom-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-subtle);
+  color: #fff;
+  cursor: pointer;
+  padding: 0;
+  outline: none;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.zoom-btn:active {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(0.90);
+}
+
+.zoom-track-container {
+  width: 30px;
+  height: 100px;
+  margin: 6px 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.zoom-track-bg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+
+.zoom-track-fill {
+  position: absolute;
+  bottom: 0;
+  width: 5px;
+  height: 0%;
+  background: var(--apple-blue, #0A84FF);
+  border-radius: 4px;
+  box-shadow: 0 0 8px rgba(10, 132, 255, 0.5);
+  transition: height 0.05s ease-out;
+}
+
+.zoom-thumb {
+  position: absolute;
+  bottom: 0%;
+  left: 50%;
+  transform: translate(-50%, 50%);
+  width: 17px;
+  height: 17px;
+  background: #ffffff;
+  border: 2px solid #0A84FF;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  transition: bottom 0.05s ease-out, transform 0.1s ease;
+}
+
+.zoom-track-container:active .zoom-thumb {
+  transform: translate(-50%, 50%) scale(1.15);
+}
+
+.zoom-badge-btn {
+  margin-top: 4px;
+  padding: 3px 6px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  outline: none;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.zoom-badge-btn.zoomed {
+  background: rgba(10, 132, 255, 0.25);
+  border-color: #0A84FF;
+  color: #64D2FF;
+}
+
+.zoom-badge-btn:active {
+  transform: scale(0.92);
 }
 
 /* Broadcaster Chat Sidebar Drawer & Edge Tab */

@@ -74,6 +74,32 @@ export function renderStreamerView(container, navigate) {
         </div>
       </footer>
 
+      <!-- Broadcaster Camera Zoom Slider on Left Edge -->
+      <div class="streamer-zoom-control frosted-glass" id="streamer-zoom-control">
+        <button class="zoom-btn" id="btn-zoom-in" title="Zoom in (+0.2x)" aria-label="Zoom in">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+
+        <div class="zoom-track-container" id="zoom-track-container" title="Drag to Zoom">
+          <div class="zoom-track-bg"></div>
+          <div class="zoom-track-fill" id="zoom-track-fill"></div>
+          <div class="zoom-thumb" id="zoom-thumb"></div>
+        </div>
+
+        <button class="zoom-btn" id="btn-zoom-out" title="Zoom out (-0.2x)" aria-label="Zoom out">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+
+        <button class="zoom-badge-btn" id="btn-zoom-badge" title="Tap to toggle 1.0x / 2.0x">
+          <span id="txt-zoom-level">1.0x</span>
+        </button>
+      </div>
+
       <!-- Broadcaster Comments Edge Tab (Pulsing when unread) -->
       <div class="streamer-chat-tab" id="chat-edge-tab" title="View Viewer Comments">
         <span>💬</span>
@@ -250,6 +276,20 @@ export function renderStreamerView(container, navigate) {
   const btnVoiceMic = container.querySelector('#btn-voice-mic');
   const dictationStatus = container.querySelector('#dictation-status');
 
+  // Zoom control elements on left edge
+  const zoomControl = container.querySelector('#streamer-zoom-control');
+  const btnZoomIn = container.querySelector('#btn-zoom-in');
+  const btnZoomOut = container.querySelector('#btn-zoom-out');
+  const zoomTrackContainer = container.querySelector('#zoom-track-container');
+  const zoomTrackFill = container.querySelector('#zoom-track-fill');
+  const zoomThumb = container.querySelector('#zoom-thumb');
+  const btnZoomBadge = container.querySelector('#btn-zoom-badge');
+  const txtZoomLevel = container.querySelector('#txt-zoom-level');
+
+  let currentZoom = 1.0;
+  let maxZoom = 4.0;
+  let hardwareZoomSupported = false;
+
   // --- 1. Camera Initialization & Wake Lock ---
   async function initCamera() {
     try {
@@ -260,6 +300,22 @@ export function renderStreamerView(container, navigate) {
       videoElem.srcObject = mediaStream;
       videoElem.style.display = 'block';
       canvasElem.style.display = 'none';
+
+      // Detect hardware optical/digital zoom capabilities on device camera
+      try {
+        const track = mediaStream ? mediaStream.getVideoTracks()[0] : null;
+        if (track && typeof track.getCapabilities === 'function') {
+          const caps = track.getCapabilities();
+          if (caps && caps.zoom) {
+            hardwareZoomSupported = true;
+            if (caps.zoom.max && caps.zoom.max > 1.0) {
+              maxZoom = Math.min(6.0, Math.max(3.0, caps.zoom.max));
+            }
+          }
+        }
+      } catch (err) {
+        console.log('Camera capabilities check ignored:', err);
+      }
     } catch (err) {
       console.warn('Real camera not available, falling back to simulated volleyball court:', err);
       startSimulatedVolleyballCourt(canvasElem);
@@ -275,6 +331,112 @@ export function renderStreamerView(container, navigate) {
       console.log('Wake Lock ignored or unsupported:', e);
     }
   }
+
+  // --- Zoom Handling (Hardware Track Zoom + Universal GPU-accelerated CSS Transform) ---
+  async function applyZoom(val) {
+    currentZoom = Math.max(1.0, Math.min(maxZoom, Math.round(val * 10) / 10));
+
+    // 1. Hardware camera sensor zoom if supported by mobile browser
+    if (hardwareZoomSupported && mediaStream) {
+      const track = mediaStream.getVideoTracks()[0];
+      if (track && track.readyState === 'live') {
+        try {
+          await track.applyConstraints({
+            advanced: [{ zoom: currentZoom }]
+          });
+        } catch (e) {
+          // Ignore constraint warning
+        }
+      }
+    }
+
+    // 2. GPU-accelerated CSS scale transform (universal on all devices and canvas simulation)
+    const scaleStr = currentZoom > 1.01 ? `scale(${currentZoom})` : 'none';
+    videoElem.style.transform = scaleStr;
+    canvasElem.style.transform = scaleStr;
+
+    // 3. Update slider track & badge UI
+    const ratio = (currentZoom - 1.0) / (maxZoom - 1.0);
+    const pct = Math.max(0, Math.min(100, ratio * 100));
+    zoomTrackFill.style.height = `${pct}%`;
+    zoomThumb.style.bottom = `${pct}%`;
+    txtZoomLevel.textContent = `${currentZoom.toFixed(1)}x`;
+
+    if (currentZoom > 1.05) {
+      btnZoomBadge.classList.add('zoomed');
+    } else {
+      btnZoomBadge.classList.remove('zoomed');
+    }
+  }
+
+  // Stop propagation on zoom control so touching it never triggers +1 point on left court zone
+  zoomControl.addEventListener('pointerdown', (e) => e.stopPropagation());
+  zoomControl.addEventListener('touchstart', (e) => e.stopPropagation());
+  zoomControl.addEventListener('click', (e) => e.stopPropagation());
+
+  // Slider Dragging (desktop mouse and mobile touch)
+  let isDraggingZoom = false;
+
+  function handleZoomPointer(e) {
+    const rect = zoomTrackContainer.getBoundingClientRect();
+    const clientY = e.clientY != null ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : rect.bottom);
+    // Bottom is 1.0x (wide), Top is maxZoom (telephoto)
+    const ratio = (rect.bottom - clientY) / rect.height;
+    const clamped = Math.max(0, Math.min(1, ratio));
+    const targetZoom = 1.0 + clamped * (maxZoom - 1.0);
+    applyZoom(targetZoom);
+  }
+
+  zoomTrackContainer.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    isDraggingZoom = true;
+    if (zoomTrackContainer.setPointerCapture) {
+      try { zoomTrackContainer.setPointerCapture(e.pointerId); } catch (err) {}
+    }
+    handleZoomPointer(e);
+  });
+
+  zoomTrackContainer.addEventListener('pointermove', (e) => {
+    if (!isDraggingZoom) return;
+    e.stopPropagation();
+    e.preventDefault();
+    handleZoomPointer(e);
+  });
+
+  const stopZoomDrag = (e) => {
+    if (isDraggingZoom) {
+      e.stopPropagation();
+      isDraggingZoom = false;
+      store.triggerHaptic('light');
+    }
+  };
+  zoomTrackContainer.addEventListener('pointerup', stopZoomDrag);
+  zoomTrackContainer.addEventListener('pointercancel', stopZoomDrag);
+
+  // Zoom In / Out Buttons (+0.2x / -0.2x)
+  btnZoomIn.onclick = (e) => {
+    e.stopPropagation();
+    applyZoom(currentZoom + 0.2);
+    store.triggerHaptic('light');
+  };
+
+  btnZoomOut.onclick = (e) => {
+    e.stopPropagation();
+    applyZoom(currentZoom - 0.2);
+    store.triggerHaptic('light');
+  };
+
+  // Zoom Badge: tap to snap to 1.0x if zoomed, or toggle to 2.0x for rapid close-up
+  btnZoomBadge.onclick = (e) => {
+    e.stopPropagation();
+    if (currentZoom > 1.05) {
+      applyZoom(1.0);
+    } else {
+      applyZoom(2.0);
+    }
+    store.triggerHaptic('light');
+  };
 
   // --- 2. Update UI from Store ---
   function updateUI() {
