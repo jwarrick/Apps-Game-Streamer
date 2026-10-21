@@ -5,6 +5,7 @@
 import { store } from '../services/store.js';
 import { ReplayPlayer } from './ReplayPlayer.js';
 import { authService } from '../services/auth.js';
+import { downloadHighlightVideo } from '../services/download.js';
 
 export function renderHubView(container, navigate) {
   function update() {
@@ -104,11 +105,18 @@ export function renderHubView(container, navigate) {
                         <span class="highlight-badge tabular-nums">Set ${h.set} (${h.score})</span>
                         <span class="highlight-label">${h.label || 'Highlight'}</span>
                       </div>
-                      <div>
+                      <div style="display: flex; align-items: center; gap: 8px;">
                         ${h.isUploading ? `
                           <span class="highlight-uploading">⏳ Uploading...</span>
                         ` : `
-                          <button class="apple-btn btn-play-clip" data-clip-id="${h.id}" data-match-id="${m.id}">▶</button>
+                          <button class="apple-btn btn-play-clip" data-clip-id="${h.id}" data-match-id="${m.id}" title="Watch Highlight Replay">▶</button>
+                          <button class="btn-download-clip" data-clip-id="${h.id}" data-match-id="${m.id}" title="Save to Photos / Download" aria-label="Download Highlight">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                              <polyline points="7 10 12 15 17 10"></polyline>
+                              <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                          </button>
                         `}
                       </div>
                     </div>
@@ -186,6 +194,22 @@ export function renderHubView(container, navigate) {
           const clip = match.highlights.find(c => c.id === clipId);
           if (clip) {
             new ReplayPlayer(clip);
+          }
+        }
+      };
+    });
+
+    // Clip download buttons (Save to Camera Roll / Photos on iOS, Downloads folder on PC)
+    container.querySelectorAll('.btn-download-clip').forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const matchId = btn.dataset.matchId;
+        const clipId = btn.dataset.clipId;
+        const match = state.matches.find(m => m.id === matchId);
+        if (match) {
+          const clip = match.highlights.find(c => c.id === clipId);
+          if (clip) {
+            downloadHighlightVideo(clip, btn);
           }
         }
       };
