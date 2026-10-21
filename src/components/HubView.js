@@ -11,6 +11,7 @@ export function renderHubView(container, navigate) {
   function update() {
     const state = store.getState();
     const active = state.activeMatch;
+    const stats = store.getServerStorageStats();
 
     container.innerHTML = `
       <div class="hub-container">
@@ -67,6 +68,29 @@ export function renderHubView(container, navigate) {
           </div>
         `}
 
+        <!-- Server Cloud Storage Usage Card -->
+        <div class="storage-card frosted-glass">
+          <div class="storage-card-header">
+            <div class="storage-title-wrap">
+              <span style="font-size: 16px;">☁️</span>
+              <span class="storage-title">App Server Storage</span>
+              <span class="storage-plan-badge">5.0 GB Free Tier</span>
+            </div>
+            <div class="storage-stats-text tabular-nums">
+              <strong>${stats.usedMB} MB</strong> / ${stats.maxGB} (${stats.percentUsed}%)
+            </div>
+          </div>
+
+          <div class="storage-bar-track">
+            <div class="storage-bar-fill" style="width: ${Math.max(1.5, Math.min(100, Number(stats.percentUsed)))}%;"></div>
+          </div>
+
+          <div class="storage-card-footer">
+            <span>${stats.activeMatchesCount} active match${stats.activeMatchesCount === 1 ? '' : 'es'} (${stats.activeClipsCount} fast clips) • ${stats.archivedMatchesCount} archived to Drive</span>
+            <span style="color: var(--text-tertiary);">Archive older matches anytime to trim space</span>
+          </div>
+        </div>
+
         <!-- Unified Match Archive -->
         <section class="archive-section">
           <div class="archive-header">
@@ -85,7 +109,15 @@ export function renderHubView(container, navigate) {
                       ${m.highlights.length} Highlight${m.highlights.length === 1 ? '' : 's'} • Sets: ${m.setsUs}-${m.setsThem}
                     </div>
                   </div>
-                  <div>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    ${m.isArchived ? `
+                      <span class="match-archive-badge" title="Server copies deleted; playing via Google Drive">📦 Drive Archived</span>
+                    ` : (!m.isLive ? `
+                      <button class="apple-btn btn-archive-match" data-match-id="${m.id}" data-opponent="${m.opponent}" title="Delete server video files and rely on Google Drive to free up space" style="padding: 3px 8px; font-size: 11px;">
+                        📦 Archive to Drive
+                      </button>
+                    ` : '')}
+
                     ${m.isLive ? `
                       <span class="match-result-badge live">🔴 In Progress</span>
                     ` : (m.setsUs > m.setsThem ? `
@@ -110,7 +142,10 @@ export function renderHubView(container, navigate) {
                         ${h.isUploading ? `
                           <span class="highlight-uploading">⏳ Uploading...</span>
                         ` : `
-                          <button class="apple-btn btn-play-clip" data-clip-id="${h.id}" data-match-id="${m.id}" title="Watch Highlight Replay">▶</button>
+                          ${(m.isArchived || !h.videoUrl) ? `
+                            <span class="drive-clip-tag" title="Saved in Google Drive">📁 Drive</span>
+                          ` : ''}
+                          <button class="apple-btn btn-play-clip" data-clip-id="${h.id}" data-match-id="${m.id}" title="${(m.isArchived || !h.videoUrl) ? 'Watch Highlight via Google Drive' : 'Watch Highlight Replay'}">▶</button>
                           <button class="btn-share-clip" data-clip-id="${h.id}" data-match-id="${m.id}" title="Share Highlight (Text, AirDrop, or Save to Photos)" aria-label="Share Highlight">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
                               <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
@@ -228,6 +263,24 @@ export function renderHubView(container, navigate) {
           if (clip) {
             shareHighlightVideo(clip, btn);
           }
+        }
+      };
+    });
+
+    // Match Archive button (Delete server video copies to free space, rely on Google Drive)
+    container.querySelectorAll('.btn-archive-match').forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const matchId = btn.dataset.matchId;
+        const opponent = btn.dataset.opponent || 'this';
+        const confirmed = confirm(
+          `Archive "${opponent}" match to Google Drive?\n\n` +
+          `• Server video copies will be deleted to free up cloud storage.\n` +
+          `• All highlights and scores remain permanently preserved in your Google Drive archive.\n` +
+          `• Highlights will be played via Google Drive.`
+        );
+        if (confirmed) {
+          store.archiveMatch(matchId);
         }
       };
     });

@@ -49,37 +49,58 @@ export class ReplayPlayer {
         </div>
 
         <div class="replay-video-box">
-          <video class="replay-video" id="replay-video-elem" playsinline autoplay>
-            <source src="${this.clip.videoUrl}" type="video/mp4" />
-          </video>
+          ${this.clip.videoUrl ? `
+            <video class="replay-video" id="replay-video-elem" playsinline autoplay>
+              <source src="${this.clip.videoUrl}" type="video/mp4" />
+            </video>
+          ` : `
+            <div class="replay-drive-box">
+              <span style="font-size: 38px; margin-bottom: 8px;">📦</span>
+              <div style="font-size: 16px; font-weight: 600; color: #fff;">Archived to Google Drive</div>
+              <p style="font-size: 13px; color: var(--text-secondary); max-width: 320px; margin: 8px auto 16px auto; line-height: 1.4;">
+                Server copy was deleted to free up cloud storage. This highlight is permanently preserved in your Google Drive archive.
+              </p>
+              <a href="${this.clip.driveUrl || (this.clip.driveFileId ? `https://drive.google.com/file/d/${this.clip.driveFileId}/view` : '#')}" target="_blank" class="apple-btn apple-btn-primary" style="display: inline-flex; align-items: center; gap: 6px; text-decoration: none; font-size: 13px; padding: 8px 16px;">
+                <span>▶ Play in Google Drive</span>
+              </a>
+            </div>
+          `}
         </div>
 
-        <div class="replay-controls">
-          <div class="replay-button-row">
-            <!-- Left & Play & Right: -10s, Play/Pause, +10s -->
-            <div class="replay-actions-left">
-              <button class="apple-btn replay-seek-btn" id="btn-seek-back" title="Rewind 10 seconds">-10s</button>
-              <button class="apple-btn apple-btn-primary replay-play-btn" id="btn-play-pause" title="Play or Pause">
-                ${PAUSE_ICON}
-              </button>
-              <button class="apple-btn replay-seek-btn" id="btn-seek-forward" title="Fast forward 10 seconds">+10s</button>
-            </div>
+        ${this.clip.videoUrl ? `
+          <div class="replay-controls">
+            <div class="replay-button-row">
+              <!-- Left & Play & Right: -10s, Play/Pause, +10s -->
+              <div class="replay-actions-left">
+                <button class="apple-btn replay-seek-btn" id="btn-seek-back" title="Rewind 10 seconds">-10s</button>
+                <button class="apple-btn apple-btn-primary replay-play-btn" id="btn-play-pause" title="Play or Pause">
+                  ${PAUSE_ICON}
+                </button>
+                <button class="apple-btn replay-seek-btn" id="btn-seek-forward" title="Fast forward 10 seconds">+10s</button>
+              </div>
 
-            <!-- Always visible segmented speed toggles, default 1x -->
-            <div class="speed-toggle-group" id="speed-toggle-group">
-              <button class="speed-btn active" data-speed="1.0">1x</button>
-              <button class="speed-btn" data-speed="0.5">0.5x</button>
-              <button class="speed-btn" data-speed="0.25">0.25x</button>
+              <!-- Always visible segmented speed toggles, default 1x -->
+              <div class="speed-toggle-group" id="speed-toggle-group">
+                <button class="speed-btn active" data-speed="1.0">1x</button>
+                <button class="speed-btn" data-speed="0.5">0.5x</button>
+                <button class="speed-btn" data-speed="0.25">0.25x</button>
+              </div>
             </div>
           </div>
-        </div>
+        ` : `
+          <div class="replay-controls" style="justify-content: center; padding: 12px 18px;">
+            <span style="font-size: 12px; color: var(--text-tertiary);">Google Drive File ID: ${this.clip.driveFileId || 'Archived'}</span>
+          </div>
+        `}
       </div>
     `;
 
     document.body.appendChild(this.element);
 
     this.video = this.element.querySelector('#replay-video-elem');
-    this.video.playbackRate = this.currentSpeed;
+    if (this.video) {
+      this.video.playbackRate = this.currentSpeed;
+    }
 
     this.setupListeners();
   }
@@ -103,39 +124,45 @@ export class ReplayPlayer {
       if (e.target === this.element) this.destroy();
     };
 
-    btnPlayPause.onclick = () => {
-      if (this.video.paused) {
-        this.video.play();
-        btnPlayPause.innerHTML = PAUSE_ICON;
-      } else {
-        this.video.pause();
-        btnPlayPause.innerHTML = PLAY_ICON;
-      }
-    };
-
-    btnSeekBack.onclick = () => {
-      this.video.currentTime = Math.max(0, this.video.currentTime - 10);
-    };
-
-    btnSeekForward.onclick = () => {
-      this.video.currentTime = Math.min(this.video.duration || 999, this.video.currentTime + 10);
-    };
-
-    // Speed toggle buttons (only one depressed at a time)
-    speedButtons.forEach(btn => {
-      btn.onclick = () => {
-        const speed = parseFloat(btn.dataset.speed);
-        this.currentSpeed = speed;
-        this.video.playbackRate = speed;
-
-        speedButtons.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
+    if (this.video && btnPlayPause) {
+      btnPlayPause.onclick = () => {
+        if (this.video.paused) {
+          this.video.play();
+          btnPlayPause.innerHTML = PAUSE_ICON;
+        } else {
+          this.video.pause();
+          btnPlayPause.innerHTML = PLAY_ICON;
+        }
       };
-    });
 
-    this.video.onended = () => {
-      btnPlayPause.innerHTML = PLAY_ICON;
-    };
+      if (btnSeekBack) {
+        btnSeekBack.onclick = () => {
+          this.video.currentTime = Math.max(0, this.video.currentTime - 10);
+        };
+      }
+
+      if (btnSeekForward) {
+        btnSeekForward.onclick = () => {
+          this.video.currentTime = Math.min(this.video.duration || 999, this.video.currentTime + 10);
+        };
+      }
+
+      // Speed toggle buttons (only one depressed at a time)
+      speedButtons.forEach(btn => {
+        btn.onclick = () => {
+          const speed = parseFloat(btn.dataset.speed);
+          this.currentSpeed = speed;
+          this.video.playbackRate = speed;
+
+          speedButtons.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        };
+      });
+
+      this.video.onended = () => {
+        btnPlayPause.innerHTML = PLAY_ICON;
+      };
+    }
   }
 
   destroy() {

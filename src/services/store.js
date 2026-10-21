@@ -28,6 +28,7 @@ const DEFAULT_STATE = {
       date: 'Today',
       opponent: 'Lincoln High',
       isLive: false,
+      isArchived: false,
       setsUs: 1,
       setsThem: 0,
       currentSet: 2,
@@ -40,6 +41,9 @@ const DEFAULT_STATE = {
           score: '14 - 12',
           label: '🔥 Ace!',
           videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+          driveFileId: 'drive_h_1',
+          driveUrl: 'https://drive.google.com/file/d/drive_h_1/view',
+          fileSizeBytes: 3400000,
           isUploading: false,
           timestamp: Date.now() - 1800000
         },
@@ -49,6 +53,9 @@ const DEFAULT_STATE = {
           score: '24 - 23',
           label: '💪 Big Block!',
           videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
+          driveFileId: 'drive_h_2',
+          driveUrl: 'https://drive.google.com/file/d/drive_h_2/view',
+          fileSizeBytes: 3500000,
           isUploading: false,
           timestamp: Date.now() - 900000
         },
@@ -58,6 +65,9 @@ const DEFAULT_STATE = {
           score: '18 - 16',
           label: '💣 Crazy Kill',
           videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
+          driveFileId: 'drive_h_3',
+          driveUrl: 'https://drive.google.com/file/d/drive_h_3/view',
+          fileSizeBytes: 3300000,
           isUploading: true, // Show the uploading state requested!
           timestamp: Date.now() - 60000
         }
@@ -68,6 +78,7 @@ const DEFAULT_STATE = {
       date: 'Oct 18, 2026',
       opponent: 'West High',
       isLive: false,
+      isArchived: false,
       setsUs: 2,
       setsThem: 1,
       currentSet: 3,
@@ -80,6 +91,9 @@ const DEFAULT_STATE = {
           score: '19 - 17',
           label: '⛏️ Amazing Dig',
           videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4',
+          driveFileId: 'drive_h_w1',
+          driveUrl: 'https://drive.google.com/file/d/drive_h_w1/view',
+          fileSizeBytes: 3400000,
           isUploading: false,
           timestamp: 1729267200000
         },
@@ -89,6 +103,9 @@ const DEFAULT_STATE = {
           score: '14 - 11',
           label: '🎯 Cool Set',
           videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
+          driveFileId: 'drive_h_w2',
+          driveUrl: 'https://drive.google.com/file/d/drive_h_w2/view',
+          fileSizeBytes: 3600000,
           isUploading: false,
           timestamp: 1729270800000
         }
@@ -106,6 +123,8 @@ const DEFAULT_STATE = {
       date: 'Oct 11, 2026',
       opponent: 'East High',
       isLive: false,
+      isArchived: true, // Example of match already archived to Google Drive!
+      archivedAt: 1728700000000,
       setsUs: 2,
       setsThem: 0,
       currentSet: 2,
@@ -117,7 +136,11 @@ const DEFAULT_STATE = {
           set: 2,
           score: '24 - 21',
           label: 'Highlight',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4',
+          videoUrl: null, // Server copy deleted to save cloud storage!
+          serverVideoDeleted: true,
+          driveFileId: 'drive_h_e1',
+          driveUrl: 'https://drive.google.com/file/d/drive_h_e1/view',
+          fileSizeBytes: 3400000,
           isUploading: false,
           timestamp: 1728662400000
         }
@@ -151,6 +174,17 @@ class GameStore {
             merged.activeMatch.setsUs = 0;
             merged.activeMatch.setsThem = 0;
             merged.activeMatch.currentSet = 1;
+          }
+          // Ensure all matches and clips have archive & drive properties
+          for (const match of (merged.matches || [])) {
+            if (typeof match.isArchived === 'undefined') {
+              match.isArchived = false;
+            }
+            for (const clip of (match.highlights || [])) {
+              if (!clip.fileSizeBytes) clip.fileSizeBytes = 3400000;
+              if (!clip.driveFileId) clip.driveFileId = 'drive_' + clip.id;
+              if (!clip.driveUrl) clip.driveUrl = `https://drive.google.com/file/d/${clip.driveFileId}/view`;
+            }
           }
           return merged;
         }
@@ -327,12 +361,17 @@ class GameStore {
     const cheer = this.state.recentCheerPill;
     const label = chosenLabel || (cheer ? cheer.text : 'Highlight');
 
+    const clipId = 'h_' + Date.now();
+    const driveId = 'drive_' + clipId;
     const newClip = {
-      id: 'h_' + Date.now(),
+      id: clipId,
       set: m.currentSet,
       score: `${m.scoreUs} - ${m.scoreThem}`,
       label: label,
       videoUrl: videoBlobOrUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+      driveFileId: driveId,
+      driveUrl: `https://drive.google.com/file/d/${driveId}/view`,
+      fileSizeBytes: 3400000,
       isUploading: true,
       timestamp: Date.now()
     };
@@ -482,6 +521,91 @@ class GameStore {
     if (existing) {
       existing.isLive = false;
     }
+    this.saveState();
+  }
+
+  // --- Server Storage & Google Drive Archiving ---
+
+  getServerStorageStats() {
+    const FREE_TIER_BYTES = 5 * 1024 * 1024 * 1024; // 5.0 GB Free Allowance
+    let usedBytes = 0;
+    let activeClipsCount = 0;
+    let archivedClipsCount = 0;
+    let activeMatchesCount = 0;
+    let archivedMatchesCount = 0;
+
+    for (const match of this.state.matches) {
+      if (match.isArchived) {
+        archivedMatchesCount++;
+        for (const clip of (match.highlights || [])) {
+          archivedClipsCount++;
+        }
+      } else {
+        activeMatchesCount++;
+        for (const clip of (match.highlights || [])) {
+          if (!clip.serverVideoDeleted && clip.videoUrl) {
+            const size = clip.fileSizeBytes || 3400000;
+            usedBytes += size;
+            activeClipsCount++;
+          }
+        }
+      }
+    }
+
+    const usedMB = (usedBytes / (1024 * 1024)).toFixed(1);
+    const percentNum = (usedBytes / FREE_TIER_BYTES) * 100;
+    const percentUsed = percentNum < 0.1 && percentNum > 0 ? '0.1' : percentNum.toFixed(1);
+
+    return {
+      usedBytes,
+      maxBytes: FREE_TIER_BYTES,
+      usedMB,
+      maxGB: '5.0 GB',
+      percentUsed,
+      activeMatchesCount,
+      archivedMatchesCount,
+      activeClipsCount,
+      archivedClipsCount
+    };
+  }
+
+  archiveMatch(matchId) {
+    const match = this.state.matches.find(m => m.id === matchId);
+    if (!match || match.isArchived) return 0;
+
+    let freedBytes = 0;
+    match.isArchived = true;
+    match.archivedAt = Date.now();
+
+    for (const clip of (match.highlights || [])) {
+      if (clip.videoUrl) {
+        freedBytes += clip.fileSizeBytes || 3400000;
+      }
+      clip.serverVideoDeleted = true;
+      clip.videoUrl = null; // Server copy purged to reclaim cloud space
+      clip.driveFileId = clip.driveFileId || ('drive_' + clip.id);
+      clip.driveUrl = clip.driveUrl || `https://drive.google.com/file/d/${clip.driveFileId}/view`;
+    }
+
+    this.triggerHaptic('medium');
+    this.saveState();
+    return freedBytes;
+  }
+
+  unarchiveMatch(matchId) {
+    const match = this.state.matches.find(m => m.id === matchId);
+    if (!match || !match.isArchived) return;
+
+    match.isArchived = false;
+    match.archivedAt = null;
+
+    // Restore server video reference
+    for (const clip of (match.highlights || [])) {
+      clip.serverVideoDeleted = false;
+      clip.videoUrl = clip.videoUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+    }
+
+    this.triggerHaptic('light');
     this.saveState();
   }
 

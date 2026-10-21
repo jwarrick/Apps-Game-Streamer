@@ -5,7 +5,28 @@
 // ==========================================================================
 
 export async function shareHighlightVideo(clip, buttonElement = null) {
-  if (!clip || !clip.videoUrl) return;
+  if (!clip) return;
+
+  // If clip is archived to Google Drive (server copy deleted)
+  if (!clip.videoUrl) {
+    const driveUrl = clip.driveUrl || (clip.driveFileId ? `https://drive.google.com/file/d/${clip.driveFileId}/view` : null);
+    if (driveUrl) {
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: `${clip.label || 'Volleyball Highlight'} (Archived)`,
+            text: `Volleyball Highlight: ${clip.label || ''} (Set ${clip.set}, ${clip.score}) - Google Drive Archive`,
+            url: driveUrl
+          });
+          return;
+        } catch (e) {
+          if (e.name === 'AbortError') return;
+        }
+      }
+      window.open(driveUrl, '_blank');
+    }
+    return;
+  }
 
   const cleanLabel = (clip.label || 'Highlight').replace(/[^a-zA-Z0-9]/g, '_');
   const cleanScore = (clip.score || '0-0').replace(/\s+/g, '');
