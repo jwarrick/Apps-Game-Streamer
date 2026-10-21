@@ -125,8 +125,9 @@ export function renderHubView(container, navigate) {
                     ` : ''}
 
                     ${!m.isFinished ? `
-                      <button class="apple-btn btn-resume-match" data-match-id="${m.id}" title="Resume live broadcasting this match" style="padding: 3px 8px; font-size: 11px; background: rgba(255, 214, 10, 0.15); color: var(--accent-gold); border: 1px solid rgba(255, 214, 10, 0.35);">
-                        ▶ Resume
+                      <button class="apple-btn apple-btn-primary btn-resume-match" data-match-id="${m.id}" title="Resume live broadcasting this match" style="padding: 4px 10px; font-size: 11px; display: inline-flex; align-items: center; gap: 5px;">
+                        ${getBroadcastIcon(13, 'currentColor')}
+                        <span>Resume</span>
                       </button>
                     ` : ''}
 
@@ -140,13 +141,11 @@ export function renderHubView(container, navigate) {
 
                     ${m.isLive ? `
                       <span class="match-result-badge live">🔴 Live Now</span>
-                    ` : (!m.isFinished ? `
-                      <span class="match-result-badge in-progress" style="background: rgba(255, 149, 0, 0.16); color: var(--accent-orange); border: 1px solid rgba(255, 149, 0, 0.35);">🟡 In Progress (${m.setsUs}-${m.setsThem})</span>
-                    ` : (m.setsUs > m.setsThem ? `
+                    ` : (m.isFinished ? (m.setsUs > m.setsThem ? `
                       <span class="match-result-badge win">Won ${m.setsUs}-${m.setsThem}</span>
                     ` : `
                       <span class="match-result-badge">Final ${m.setsUs}-${m.setsThem}</span>
-                    `))}
+                    `) : '')}
                   </div>
                 </div>
 
