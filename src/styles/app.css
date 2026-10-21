@@ -600,8 +600,9 @@ body {
   animation: workingPulse 0.8s infinite alternate ease-in-out;
 }
 
-/* Broadcaster-only trashcan button (visually separated to avoid accidental clicks) */
-.btn-trash-clip {
+/* Broadcaster-only trashcan button for clips and matches (visually separated to avoid accidental clicks) */
+.btn-trash-clip,
+.btn-trash-match {
   width: 32px;
   height: 32px;
   min-width: 32px;
@@ -622,8 +623,9 @@ body {
   transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
-/* Subtle separator bar between normal actions (play/share) and destructive trashcan */
-.btn-trash-clip::before {
+/* Subtle separator bar between normal actions and destructive trashcan */
+.btn-trash-clip::before,
+.btn-trash-match::before {
   content: '';
   position: absolute;
   left: -4px;
@@ -635,7 +637,8 @@ body {
 
 /* Only enable hover on true pointer devices; use subtle neutral background rather than alarming red */
 @media (hover: hover) and (pointer: fine) {
-  .btn-trash-clip:hover {
+  .btn-trash-clip:hover,
+  .btn-trash-match:hover {
     color: #FF453A;
     background: rgba(255, 255, 255, 0.08);
     border-color: rgba(255, 255, 255, 0.12);
@@ -643,21 +646,26 @@ body {
 }
 
 .btn-trash-clip:focus,
-.btn-trash-clip:focus-visible {
+.btn-trash-clip:focus-visible,
+.btn-trash-match:focus,
+.btn-trash-match:focus-visible {
   outline: none;
   background: transparent;
 }
 
-.btn-trash-clip:active {
+.btn-trash-clip:active,
+.btn-trash-match:active {
   transform: scale(0.92);
   color: #FF453A;
   background: rgba(255, 69, 58, 0.2);
   border-color: rgba(255, 69, 58, 0.4);
 }
 
-/* Hover suppression immediately following a deletion so the shifted row does not appear armed */
+/* Hover suppression immediately following a deletion so the shifted item does not appear armed */
 .suppress-trash-hover .btn-trash-clip,
-.btn-trash-clip.no-hover {
+.suppress-trash-hover .btn-trash-match,
+.btn-trash-clip.no-hover,
+.btn-trash-match.no-hover {
   pointer-events: none !important;
   background: transparent !important;
   color: var(--text-tertiary) !important;

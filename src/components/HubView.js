@@ -146,6 +146,16 @@ export function renderHubView(container, navigate) {
                     ` : `
                       <span class="match-result-badge">Final ${m.setsUs}-${m.setsThem}</span>
                     `) : '')}
+
+                    <!-- Broadcaster-Only Match Delete Button (Separated with divider to avoid accidental deletion) -->
+                    <button class="btn-trash-match" data-match-id="${m.id}" data-opponent="${m.opponent}" data-date="${m.date}" data-clips="${(m.highlights || []).length}" title="Delete Match from Database (Broadcaster only)" aria-label="Delete Match">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        <line x1="10" y1="11" x2="10" y2="17"></line>
+                        <line x1="14" y1="11" x2="14" y2="17"></line>
+                      </svg>
+                    </button>
                   </div>
                 </div>
 
@@ -391,6 +401,62 @@ export function renderHubView(container, navigate) {
           container.classList.add('suppress-trash-hover');
 
           store.deleteHighlight(matchId, clipId);
+
+          const restoreHover = () => {
+            container.classList.remove('suppress-trash-hover');
+            window.removeEventListener('pointermove', restoreHover);
+            window.removeEventListener('mousemove', restoreHover);
+          };
+
+          window.addEventListener('pointermove', restoreHover, { once: true });
+          window.addEventListener('mousemove', restoreHover, { once: true });
+          setTimeout(restoreHover, 800);
+        }
+      };
+    });
+
+    // Match Delete button (Broadcaster only: autodetect Google credentials, confirmation dialog)
+    container.querySelectorAll('.btn-trash-match').forEach(btn => {
+      btn.onclick = async (e) => {
+        e.stopPropagation();
+        const matchId = btn.dataset.matchId;
+        const opponent = btn.dataset.opponent || 'this match';
+        const date = btn.dataset.date || '';
+        const clipsCount = btn.dataset.clips || '0';
+
+        // 1. Broadcaster credentials required (autodetected if already signed in, identically to going live)
+        let broadcaster = authService.getUser();
+        if (!broadcaster) {
+          try {
+            broadcaster = await authService.signInWithGoogle();
+          } catch (err) {
+            console.warn('Broadcaster authentication failed or cancelled:', err);
+            return;
+          }
+        }
+
+        if (!broadcaster) {
+          alert('Broadcaster credentials required to delete matches.');
+          return;
+        }
+
+        // 2. Clear confirmation prompt to prevent accidental deletions
+        const confirmed = window.confirm(
+          `Completely delete match vs. "${opponent}" (${date})?\n\n` +
+          `• Saved Highlights: ${clipsCount}\n` +
+          `• Authorized Broadcaster: ${broadcaster.name}\n\n` +
+          `⚠️ WARNING: This will permanently remove this match and all its saved clips from the database.\n\n` +
+          `Are you sure you want to delete this entire match?`
+        );
+
+        if (confirmed) {
+          if (document.activeElement && typeof document.activeElement.blur === 'function') {
+            document.activeElement.blur();
+          }
+
+          container.classList.add('suppress-trash-hover');
+
+          store.deleteMatch(matchId);
 
           const restoreHover = () => {
             container.classList.remove('suppress-trash-hover');

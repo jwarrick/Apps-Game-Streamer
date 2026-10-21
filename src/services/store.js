@@ -988,6 +988,55 @@ class GameStore {
     return true;
   }
 
+  // --- Broadcaster-Only Complete Match Deletion ---
+  deleteMatch(matchId) {
+    const matchIndex = this.state.matches.findIndex(m => m.id === matchId);
+    if (matchIndex === -1) return false;
+
+    const [deletedMatch] = this.state.matches.splice(matchIndex, 1);
+
+    // If activeMatch matches the deleted match, reset active broadcast state safely
+    if (this.state.activeMatch && this.state.activeMatch.id === matchId) {
+      this.state.activeMatch = {
+        id: 'match_' + Date.now(),
+        isLive: false,
+        isFinished: true,
+        date: 'Today',
+        opponent: 'Opponent',
+        teamUs: 'US',
+        teamThem: 'THEM',
+        courtSideUs: 'left',
+        scoreUs: 0,
+        scoreThem: 0,
+        setsUs: 0,
+        setsThem: 0,
+        currentSet: 1,
+        lastScoreTimestamp: Date.now(),
+        viewers: 0,
+        highlights: [],
+        comments: []
+      };
+      this.activePointClips = [];
+      this.previousPointClips = [];
+      this.midPointWaitState = null;
+    }
+
+    // Revoke any blob URLs for clips in this match to reclaim memory
+    if (deletedMatch && deletedMatch.highlights) {
+      for (const clip of deletedMatch.highlights) {
+        if (clip.videoUrl && clip.videoUrl.startsWith('blob:')) {
+          try {
+            URL.revokeObjectURL(clip.videoUrl);
+          } catch (e) {}
+        }
+      }
+    }
+
+    this.triggerHaptic('medium');
+    this.saveState();
+    return true;
+  }
+
   // Haptic feedback (supported on iOS 13+ & Android)
   triggerHaptic(type = 'light') {
     try {
