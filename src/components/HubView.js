@@ -4,6 +4,7 @@
 
 import { store } from '../services/store.js';
 import { ReplayPlayer } from './ReplayPlayer.js';
+import { authService } from '../services/auth.js';
 
 export function renderHubView(container, navigate) {
   function update() {
@@ -112,7 +113,11 @@ export function renderHubView(container, navigate) {
 
     const btnGoLive = container.querySelector('#btn-go-live-header');
     if (btnGoLive) {
-      btnGoLive.onclick = () => showGoLiveModal(navigate);
+      btnGoLive.onclick = async () => {
+        // Automatically triggers Google Sign-in / credential recognition directly
+        const user = await authService.signInWithGoogle();
+        showMatchSetupModal(navigate, user);
+      };
     }
 
     // Clip play buttons
@@ -135,17 +140,19 @@ export function renderHubView(container, navigate) {
   return store.subscribe(update);
 }
 
-// 4-Digit PIN protection & Opponent naming modal for the broadcaster
-function showGoLiveModal(navigate) {
+// Minimalist Opponent Setup Modal once Google Credential is verified
+function showMatchSetupModal(navigate, user) {
   const modal = document.createElement('div');
   modal.className = 'simple-modal-backdrop';
   modal.innerHTML = `
     <div class="simple-modal">
-      <h3>Start Live Broadcast</h3>
-      <p style="font-size: 13px; color: var(--text-secondary);">Enter the opponent school/club name to begin streaming.</p>
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <h3>Start Match Broadcast</h3>
+        <span style="font-size: 12px; color: var(--accent-green);">● Verified</span>
+      </div>
+      <p style="font-size: 13px; color: var(--text-secondary);">Logged in as <b>${user.name}</b>. Enter opponent to begin streaming:</p>
       
-      <input type="text" class="simple-input" id="input-opponent" placeholder="Opponent Name (e.g. Lincoln High)" value="Lincoln High" />
-      <input type="password" class="simple-input" id="input-pin" placeholder="Broadcaster PIN (Default: 1234)" value="1234" maxlength="4" />
+      <input type="text" class="simple-input" id="input-opponent" placeholder="Opponent (e.g. Lincoln High)" value="Lincoln High" />
 
       <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px;">
         <button class="apple-btn" id="btn-cancel-modal">Cancel</button>
@@ -159,18 +166,19 @@ function showGoLiveModal(navigate) {
   const btnCancel = modal.querySelector('#btn-cancel-modal');
   const btnConfirm = modal.querySelector('#btn-confirm-go-live');
   const inputOpponent = modal.querySelector('#input-opponent');
-  const inputPin = modal.querySelector('#input-pin');
 
   btnCancel.onclick = () => modal.remove();
 
-  btnConfirm.onclick = () => {
-    if (inputPin.value !== '1234') {
-      alert('Incorrect PIN. Default is 1234.');
-      return;
-    }
+  const start = () => {
     const opponent = inputOpponent.value.trim() || 'Opponent';
     store.startBroadcast(opponent);
     modal.remove();
     navigate('/stream');
   };
+
+  btnConfirm.onclick = start;
+  inputOpponent.onkeydown = (e) => {
+    if (e.key === 'Enter') start();
+  };
+  inputOpponent.focus();
 }
