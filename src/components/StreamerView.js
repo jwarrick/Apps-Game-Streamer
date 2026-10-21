@@ -144,6 +144,32 @@ export function renderStreamerView(container, navigate) {
           </div>
         </div>
       </div>
+      <!-- Exit Broadcast Modal (Pause Broadcast vs Finish Match) -->
+      <div class="highlight-pill-backdrop" id="exit-broadcast-modal" style="display: none;">
+        <div class="highlight-pill-dialog" style="max-width: 330px;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <h3 style="font-size: 16px; font-weight: 700;">Leave Broadcast</h3>
+            <button class="apple-btn" id="btn-cancel-exit-modal" style="padding: 4px 10px; font-size: 12px;">✕</button>
+          </div>
+          <p style="font-size: 13px; color: var(--text-secondary); margin: 6px 0 14px 0;">
+            Would you like to pause and keep this match in progress, or finalize the match score?
+          </p>
+
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <button class="apple-btn apple-btn-primary" id="btn-pause-stream" style="padding: 12px; font-size: 14px; font-weight: 600; text-align: left; display: flex; flex-direction: column; gap: 2px;">
+              <span>⏸ Pause Broadcast</span>
+              <span style="font-size: 11px; font-weight: 400; opacity: 0.85;">Keeps match in progress. You can resume and append highlights later today.</span>
+            </button>
+            <button class="apple-btn apple-btn-danger" id="btn-finish-stream" style="padding: 12px; font-size: 14px; font-weight: 600; text-align: left; display: flex; flex-direction: column; gap: 2px;">
+              <span>🏆 Finish Match</span>
+              <span style="font-size: 11px; font-weight: 400; opacity: 0.85;">Awards current set, finalizes match score and archives transcript.</span>
+            </button>
+            <button class="apple-btn" id="btn-cancel-exit-action" style="padding: 10px; font-size: 13px; margin-top: 4px;">
+              Cancel (Stay in Broadcast)
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   `;
 
@@ -178,6 +204,13 @@ export function renderStreamerView(container, navigate) {
   const btnModalResetSet = container.querySelector('#btn-modal-reset-set');
   const btnModalCloseSet = container.querySelector('#btn-modal-close-set');
   const btnCancelSetModal = container.querySelector('#btn-cancel-set-modal');
+
+  // Exit broadcast modal elements
+  const exitModal = container.querySelector('#exit-broadcast-modal');
+  const btnPauseStream = container.querySelector('#btn-pause-stream');
+  const btnFinishStream = container.querySelector('#btn-finish-stream');
+  const btnCancelExitModal = container.querySelector('#btn-cancel-exit-modal');
+  const btnCancelExitAction = container.querySelector('#btn-cancel-exit-action');
 
   // Chat drawer elements
   const chatEdgeTab = container.querySelector('#chat-edge-tab');
@@ -381,11 +414,30 @@ export function renderStreamerView(container, navigate) {
 
   btnEnd.onclick = (e) => {
     e.stopPropagation();
-    if (confirm('End the live broadcast and return to Home Hub?')) {
-      store.stopBroadcast();
-      cleanup();
-      navigate('/');
-    }
+    exitModal.style.display = 'flex';
+  };
+
+  btnPauseStream.onclick = (e) => {
+    e.stopPropagation();
+    store.pauseBroadcast();
+    exitModal.style.display = 'none';
+    cleanup();
+    navigate('/');
+  };
+
+  btnFinishStream.onclick = (e) => {
+    e.stopPropagation();
+    store.finishMatch();
+    exitModal.style.display = 'none';
+    cleanup();
+    navigate('/');
+  };
+
+  const closeExitModal = () => { exitModal.style.display = 'none'; };
+  btnCancelExitModal.onclick = closeExitModal;
+  btnCancelExitAction.onclick = closeExitModal;
+  exitModal.onclick = (e) => {
+    if (e.target === exitModal) closeExitModal();
   };
 
   // --- 5. Highlight Pill Picker Trigger ---

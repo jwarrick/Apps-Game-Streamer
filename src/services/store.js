@@ -42,16 +42,17 @@ const DEFAULT_STATE = {
   activeMatch: {
     id: 'demo-live',
     isLive: false,
+    isFinished: false,
     date: 'Today',
     opponent: 'Lincoln High',
     teamUs: 'US',
     teamThem: 'LINCOLN',
     courtSideUs: 'left', // 'left' or 'right'
-    scoreUs: 0,
-    scoreThem: 0,
-    setsUs: 0,
+    scoreUs: 18,
+    scoreThem: 16,
+    setsUs: 1,
     setsThem: 0,
-    currentSet: 1,
+    currentSet: 2,
     lastScoreTimestamp: Date.now(),
     viewers: 1
   },
@@ -61,6 +62,7 @@ const DEFAULT_STATE = {
       date: 'Today',
       opponent: 'Lincoln High',
       isLive: false,
+      isFinished: false,
       isArchived: false,
       setsUs: 1,
       setsThem: 0,
@@ -112,6 +114,7 @@ const DEFAULT_STATE = {
       date: 'Oct 18, 2026',
       opponent: 'West High',
       isLive: false,
+      isFinished: true,
       isArchived: false,
       setsUs: 2,
       setsThem: 1,
@@ -201,19 +204,22 @@ class GameStore {
         if (saved) {
           const parsed = JSON.parse(saved);
           const merged = { ...DEFAULT_STATE, ...parsed };
-          // If not actively streaming live, ensure score starts at 0 - 0
-          if (merged.activeMatch && !merged.activeMatch.isLive) {
+          // If not actively streaming live, reset score ONLY if match was already finished
+          if (merged.activeMatch && merged.activeMatch.isFinished) {
             merged.activeMatch.scoreUs = 0;
             merged.activeMatch.scoreThem = 0;
             merged.activeMatch.setsUs = 0;
             merged.activeMatch.setsThem = 0;
             merged.activeMatch.currentSet = 1;
           }
-          // Ensure all matches and clips have archive & drive properties, and sort highlights chronologically
+          // Ensure all matches and clips have archive, finished & drive properties, and sort highlights chronologically
           for (const match of (merged.matches || [])) {
             match.highlights = sortHighlightsChronologically(match.highlights || []);
             if (typeof match.isArchived === 'undefined') {
               match.isArchived = false;
+            }
+            if (typeof match.isFinished === 'undefined') {
+              match.isFinished = (match.id !== 'demo-live' && !match.isLive);
             }
             for (const clip of (match.highlights || [])) {
               if (!clip.fileSizeBytes) clip.fileSizeBytes = 3400000;
@@ -256,6 +262,41 @@ class GameStore {
     return this.state;
   }
 
+  // Sync active match scores, sets, and status to matches archive
+  syncActiveMatchToArchive(isFinished = false) {
+    const m = this.state.activeMatch;
+    let matchEntry = this.state.matches.find(item => item.id === m.id);
+    if (!matchEntry) {
+      matchEntry = {
+        id: m.id,
+        date: m.date || 'Today',
+        opponent: m.opponent,
+        teamUs: m.teamUs || 'US',
+        teamThem: m.teamThem,
+        isLive: m.isLive,
+        isFinished: isFinished,
+        isArchived: false,
+        setsUs: m.setsUs,
+        setsThem: m.setsThem,
+        currentSet: m.currentSet,
+        scoreUs: m.scoreUs,
+        scoreThem: m.scoreThem,
+        highlights: []
+      };
+      this.state.matches.unshift(matchEntry);
+    } else {
+      matchEntry.isLive = m.isLive;
+      matchEntry.isFinished = isFinished;
+      matchEntry.setsUs = m.setsUs;
+      matchEntry.setsThem = m.setsThem;
+      matchEntry.currentSet = m.currentSet;
+      matchEntry.scoreUs = m.scoreUs;
+      matchEntry.scoreThem = m.scoreThem;
+      matchEntry.opponent = m.opponent;
+    }
+    return matchEntry;
+  }
+
   // --- Broadcaster Score Controls ---
 
   // Tap or swipe on the left/right screen
@@ -269,6 +310,7 @@ class GameStore {
       this.state.activeMatch.scoreThem = next;
     }
     this.state.activeMatch.lastScoreTimestamp = Date.now();
+    this.syncActiveMatchToArchive(false);
     this.triggerHaptic(delta > 0 ? 'light' : 'double');
     this.saveState();
   }
@@ -277,6 +319,7 @@ class GameStore {
     this.state.activeMatch.scoreUs = 0;
     this.state.activeMatch.scoreThem = 0;
     this.state.activeMatch.lastScoreTimestamp = Date.now();
+    this.syncActiveMatchToArchive(false);
     this.triggerHaptic('medium');
     this.saveState();
   }
@@ -317,6 +360,7 @@ class GameStore {
     m.scoreUs = 0;
     m.scoreThem = 0;
     m.lastScoreTimestamp = Date.now();
+    this.syncActiveMatchToArchive(false);
     this.triggerHaptic('heavy');
     this.saveState();
   }
@@ -327,6 +371,14 @@ class GameStore {
     const lead = Math.abs(m.scoreUs - m.scoreThem);
     const maxScore = Math.max(m.scoreUs, m.scoreThem);
     return maxScore >= 25 && lead >= 2;
+  }
+
+  // Pause broadcast (match still in progress, can be resumed)
+  pauseBroadcast() {
+    this.state.activeMatch.isLive = false;
+    this.state.activeMatch.isFinished = false;
+    this.syncActiveMatchToArchive(false);
+    this.saveState();
   }
 
   // Finish match, log final set score, save complete comment transcript to archive
@@ -366,23 +418,10 @@ class GameStore {
     });
 
     m.isLive = false;
+    m.isFinished = true;
 
     // Save complete comment transcript and outcome with the match in archive
-    let matchEntry = this.state.matches.find(item => item.id === m.id);
-    if (!matchEntry) {
-      matchEntry = {
-        id: m.id,
-        date: m.date,
-        opponent: m.opponent,
-        highlights: []
-      };
-      this.state.matches.unshift(matchEntry);
-    }
-
-    matchEntry.isLive = false;
-    matchEntry.setsUs = m.setsUs;
-    matchEntry.setsThem = m.setsThem;
-    matchEntry.currentSet = m.currentSet;
+    const matchEntry = this.syncActiveMatchToArchive(true);
     matchEntry.comments = [...this.state.chat]; // Full permanent comment transcript!
 
     this.triggerHaptic('heavy');
@@ -505,40 +544,78 @@ class GameStore {
 
   // --- Streamer Lifecycle ---
 
-  startBroadcast(opponentName = 'Opponent') {
-    const oppUpper = (opponentName || 'OPPONENT').toUpperCase();
-    this.state.activeMatch.opponent = opponentName;
-    this.state.activeMatch.teamUs = 'US';
-    this.state.activeMatch.teamThem = oppUpper;
-    this.state.activeMatch.isLive = true;
-    this.state.activeMatch.date = 'Today';
-    this.state.activeMatch.scoreUs = 0;
-    this.state.activeMatch.scoreThem = 0;
-    this.state.activeMatch.setsUs = 0;
-    this.state.activeMatch.setsThem = 0;
-    this.state.activeMatch.currentSet = 1;
-    this.state.activeMatch.viewers = 1;
+  resumeMatch(matchId) {
+    const match = this.state.matches.find(m => m.id === matchId);
+    if (!match) return;
 
-    // Sync match in matches list
-    const existing = this.state.matches.find(item => item.id === this.state.activeMatch.id);
-    if (existing) {
-      existing.isLive = true;
-      existing.opponent = opponentName;
-      existing.date = 'Today';
-    } else {
-      this.state.matches.unshift({
-        id: this.state.activeMatch.id,
-        date: 'Today',
-        opponent: opponentName,
-        isLive: true,
-        setsUs: 0,
-        setsThem: 0,
-        currentSet: 1,
-        scoreUs: 0,
-        scoreThem: 0,
-        highlights: []
-      });
+    this.state.activeMatch = {
+      id: match.id,
+      isLive: true,
+      isFinished: false,
+      date: match.date || 'Today',
+      opponent: match.opponent,
+      teamUs: match.teamUs || 'US',
+      teamThem: (match.opponent || 'OPPONENT').toUpperCase(),
+      courtSideUs: 'left',
+      scoreUs: match.scoreUs || 0,
+      scoreThem: match.scoreThem || 0,
+      setsUs: match.setsUs || 0,
+      setsThem: match.setsThem || 0,
+      currentSet: match.currentSet || 1,
+      lastScoreTimestamp: Date.now(),
+      viewers: 1
+    };
+    match.isLive = true;
+    match.isFinished = false;
+    this.saveState();
+  }
+
+  startBroadcast(opponentName = 'Opponent', options = {}) {
+    if (options.resumeMatchId) {
+      this.resumeMatch(options.resumeMatchId);
+      return;
     }
+
+    const oppUpper = (opponentName || 'OPPONENT').toUpperCase();
+    const newMatchId = 'match_' + Date.now();
+    const startingSet = Math.max(1, parseInt(options.startingSet, 10) || 1);
+    const setsUs = Math.max(0, parseInt(options.setsUs, 10) || 0);
+    const setsThem = Math.max(0, parseInt(options.setsThem, 10) || 0);
+
+    this.state.activeMatch = {
+      id: newMatchId,
+      opponent: opponentName,
+      teamUs: 'US',
+      teamThem: oppUpper,
+      courtSideUs: 'left',
+      isLive: true,
+      isFinished: false,
+      date: 'Today',
+      scoreUs: 0,
+      scoreThem: 0,
+      setsUs: setsUs,
+      setsThem: setsThem,
+      currentSet: startingSet,
+      lastScoreTimestamp: Date.now(),
+      viewers: 1
+    };
+
+    this.state.matches.unshift({
+      id: newMatchId,
+      date: 'Today',
+      opponent: opponentName,
+      teamUs: 'US',
+      teamThem: oppUpper,
+      isLive: true,
+      isFinished: false,
+      isArchived: false,
+      setsUs: setsUs,
+      setsThem: setsThem,
+      currentSet: startingSet,
+      scoreUs: 0,
+      scoreThem: 0,
+      highlights: []
+    });
 
     this.saveState();
   }
@@ -547,6 +624,7 @@ class GameStore {
     this.state.activeMatch = {
       id: 'demo-live',
       isLive: true,
+      isFinished: false,
       date: 'Today',
       opponent: 'Lincoln High',
       teamUs: 'US',
@@ -560,16 +638,16 @@ class GameStore {
       lastScoreTimestamp: Date.now(),
       viewers: 3
     };
+    const demo = this.state.matches.find(m => m.id === 'demo-live');
+    if (demo) {
+      demo.isLive = true;
+      demo.isFinished = false;
+    }
     this.saveState();
   }
 
   stopBroadcast() {
-    this.state.activeMatch.isLive = false;
-    const existing = this.state.matches.find(item => item.id === this.state.activeMatch.id);
-    if (existing) {
-      existing.isLive = false;
-    }
-    this.saveState();
+    this.pauseBroadcast();
   }
 
   // --- Server Storage & Google Drive Archiving ---

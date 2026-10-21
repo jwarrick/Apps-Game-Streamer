@@ -13,7 +13,8 @@ export class HighlightReelPlayer {
     this.onClose = onClose;
     // Strictly order highlights chronologically: Set ascending, Total score points ascending
     const sorted = sortHighlightsChronologically(match.highlights || []);
-    this.clips = sorted.filter(h => h.videoUrl || h.driveUrl);
+    // Skip clips currently uploading to avoid stalling or waiting indefinitely
+    this.clips = sorted.filter(h => !h.isUploading && (h.videoUrl || h.driveUrl));
     this.currentIndex = 0;
     this.isPlaying = true;
     this.currentSpeed = 1.0;
@@ -22,7 +23,12 @@ export class HighlightReelPlayer {
     this.video = null;
 
     if (this.clips.length === 0) {
-      alert('No video highlights available for this match yet.');
+      const hasUploading = (match.highlights || []).some(h => h.isUploading);
+      if (hasUploading) {
+        alert('Highlights for this match are still uploading to the cloud. They will be ready to watch in the reel in just a few moments!');
+      } else {
+        alert('No video highlights available for this match yet.');
+      }
       if (this.onClose) this.onClose();
       return;
     }
@@ -99,22 +105,39 @@ export class HighlightReelPlayer {
           <button class="apple-btn reel-nav-btn" id="btn-reel-next" title="Next Highlight">Next ⏭</button>
         </div>
 
-        <!-- Match Final Overlay Screen (Celebration screen at end of reel) -->
+        <!-- Match Final / In-Progress Overlay Screen at end of reel -->
         <div class="reel-final-overlay frosted-glass" id="reel-final-overlay" style="display: none;">
-          <div class="reel-trophy-icon">🏆</div>
-          <div class="reel-final-tag">MATCH FINAL</div>
-          <div class="reel-final-score-line tabular-nums" id="reel-final-score-display">
-            ${this.match.setsUs} - ${this.match.setsThem}
-          </div>
-          <div class="reel-final-matchup-text" id="reel-final-matchup-text">
-            Final: ${this.match.setsUs} (${this.match.teamUs || 'US'}) - ${this.match.setsThem} (${this.match.opponent})
-          </div>
-          <div class="reel-final-winner-badge" id="reel-final-winner-badge">
-            ${this.match.setsUs > this.match.setsThem ? '🎉 US Wins the Match!' : `🏐 ${this.match.opponent} Wins the Match`}
-          </div>
-          <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 24px;">
-            ${this.match.date} • Complete Highlight Reel Finished
-          </div>
+          ${this.match.isFinished ? `
+            <div class="reel-trophy-icon">🏆</div>
+            <div class="reel-final-tag">MATCH FINAL</div>
+            <div class="reel-final-score-line tabular-nums" id="reel-final-score-display">
+              ${this.match.setsUs} - ${this.match.setsThem}
+            </div>
+            <div class="reel-final-matchup-text" id="reel-final-matchup-text">
+              Final: ${this.match.setsUs} (${this.match.teamUs || 'US'}) - ${this.match.setsThem} (${this.match.opponent})
+            </div>
+            <div class="reel-final-winner-badge" id="reel-final-winner-badge">
+              ${this.match.setsUs > this.match.setsThem ? '🎉 US Wins the Match!' : `🏐 ${this.match.opponent} Wins the Match`}
+            </div>
+            <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 24px;">
+              ${this.match.date} • Complete Highlight Reel Finished
+            </div>
+          ` : `
+            <div class="reel-trophy-icon" style="filter: drop-shadow(0 4px 16px rgba(255, 149, 0, 0.5));">⏳</div>
+            <div class="reel-final-tag" style="color: var(--accent-orange);">MATCH STILL IN PROGRESS</div>
+            <div class="reel-final-score-line tabular-nums" id="reel-final-score-display" style="font-size: 36px; margin-bottom: 8px;">
+              Set ${this.match.currentSet || 1} • ${this.match.scoreUs || 0} - ${this.match.scoreThem || 0}
+            </div>
+            <div class="reel-final-matchup-text" id="reel-final-matchup-text">
+              Sets so far: ${this.match.setsUs || 0} (${this.match.teamUs || 'US'}) - ${this.match.setsThem || 0} (${this.match.opponent})
+            </div>
+            <div class="reel-final-winner-badge" id="reel-final-winner-badge" style="color: var(--accent-orange); background: rgba(255, 149, 0, 0.15); border-color: rgba(255, 149, 0, 0.35);">
+              ${this.match.isLive ? '🔴 Live Stream Currently Active' : '⏸️ Match Paused / In Progress'}
+            </div>
+            <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 24px; max-width: 320px; line-height: 1.4;">
+              All uploaded highlights played. More clips will appear automatically as the match continues!
+            </div>
+          `}
           <div class="reel-final-actions">
             <button class="apple-btn apple-btn-primary" id="btn-reel-restart" style="padding: 10px 20px; font-size: 15px;">↺ Replay Reel</button>
             <button class="apple-btn" id="btn-reel-exit-final" style="padding: 10px 20px; font-size: 15px;">✕ Done</button>
