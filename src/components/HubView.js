@@ -234,24 +234,7 @@ export function renderHubView(container, navigate) {
     const btnDrive = container.querySelector('#btn-drive-header');
     if (btnDrive) {
       btnDrive.onclick = () => {
-        const currentUrl = store.getDriveLocation();
-        const action = confirm(
-          `Google Drive Match Clips Folder:\n${currentUrl}\n\n` +
-          `• Click OK to open your clips folder in Google Drive.\n` +
-          `• Click Cancel to change the Google Drive folder location.`
-        );
-        if (action) {
-          window.open(currentUrl, '_blank');
-        } else {
-          const chosen = prompt(
-            'Enter your Google Drive Match Clips folder link:\n(Clips will be backed up here and preserved across sessions)',
-            currentUrl
-          );
-          if (chosen && chosen.trim()) {
-            store.setDriveLocation(chosen.trim());
-            alert(`Google Drive folder saved!\nAll highlights will be backed up to:\n${chosen.trim()}`);
-          }
-        }
+        showDriveFolderModal();
       };
     }
 
@@ -461,10 +444,19 @@ function showMatchSetupModal(navigate, user) {
       </label>
       <input type="text" class="simple-input" id="input-opponent" placeholder="Opponent (e.g. Lincoln High)" value="${unfinishedMatch ? '' : 'Lincoln High'}" />
 
-      <!-- Starting Set Stepper -->
-      <div style="margin-top: 14px;">
+      <!-- Cancel and Start Stream buttons placed directly below opponent name entry -->
+      <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px;">
+        <button class="apple-btn" id="btn-cancel-modal">Cancel</button>
+        <button class="apple-btn apple-btn-primary" id="btn-confirm-go-live" style="display: inline-flex; align-items: center; gap: 6px;">
+          ${getBroadcastIcon(16, 'currentColor')}
+          <span>Start Stream</span>
+        </button>
+      </div>
+
+      <!-- Starting Set Stepper (Placed further down as it will rarely be used) -->
+      <div style="border-top: 1px solid var(--border-subtle); margin-top: 18px; padding-top: 14px;">
         <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 6px;">
-          Starting Set:
+          Starting Set (Optional / Late Arrival):
         </label>
         <div style="display: flex; align-items: center; gap: 12px;">
           <div style="display: inline-flex; align-items: center; border: 1px solid var(--border-subtle); border-radius: 8px; overflow: hidden; background: rgba(255,255,255,0.04);">
@@ -499,25 +491,6 @@ function showMatchSetupModal(navigate, user) {
             </div>
           </div>
         </div>
-      </div>
-
-      <!-- Persisted Google Drive Backup Location -->
-      <div style="margin-top: 14px; padding: 10px 12px; background: rgba(255,255,255,0.04); border-radius: 10px; border: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-        <div style="min-width: 0; flex: 1;">
-          <div style="font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Google Drive Backup Folder</div>
-          <div style="font-size: 12px; color: #fff; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; margin-top: 2px;" id="lbl-drive-setup-target">
-            ${store.getDriveLocation()}
-          </div>
-        </div>
-        <button class="apple-btn" id="btn-edit-drive-setup" style="padding: 4px 10px; font-size: 11px; flex-shrink: 0;" type="button">Change</button>
-      </div>
-
-      <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px;">
-        <button class="apple-btn" id="btn-cancel-modal">Cancel</button>
-        <button class="apple-btn apple-btn-primary" id="btn-confirm-go-live" style="display: inline-flex; align-items: center; gap: 6px;">
-          ${getBroadcastIcon(16, 'currentColor')}
-          <span>Start Stream</span>
-        </button>
       </div>
     </div>
   `;
@@ -600,18 +573,6 @@ function showMatchSetupModal(navigate, user) {
     }
   };
 
-  const btnEditDrive = modal.querySelector('#btn-edit-drive-setup');
-  const lblDriveSetupTarget = modal.querySelector('#lbl-drive-setup-target');
-  if (btnEditDrive) {
-    btnEditDrive.onclick = () => {
-      const current = store.getDriveLocation();
-      const chosen = prompt('Enter your Google Drive Match Clips folder link:\n(This persists across sessions so you never have to remember to set it)', current);
-      if (chosen && chosen.trim()) {
-        store.setDriveLocation(chosen.trim());
-        if (lblDriveSetupTarget) lblDriveSetupTarget.textContent = chosen.trim();
-      }
-    };
-  }
 
   if (btnResumeInProgress && unfinishedMatch) {
     btnResumeInProgress.onclick = () => {
@@ -639,4 +600,105 @@ function showMatchSetupModal(navigate, user) {
     if (e.key === 'Enter') startNew();
   };
   inputOpponent.focus();
+}
+
+// Dedicated Google Drive Location Modal with explicit Cancel, Change, and Open buttons
+function showDriveFolderModal() {
+  const currentUrl = store.getDriveLocation();
+  const modal = document.createElement('div');
+  modal.className = 'simple-modal-backdrop';
+  modal.innerHTML = `
+    <div class="simple-modal" style="max-width: 440px;">
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+          <span>📁</span>
+          <span>Google Drive Archive</span>
+        </h3>
+        <button class="apple-btn" id="btn-drive-dialog-close" style="padding: 4px 10px; font-size: 12px;">✕</button>
+      </div>
+
+      <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.4; margin: 0;">
+        Match highlight clips and archived footage are backed up to your Google Drive location:
+      </p>
+
+      <div style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 12px; word-break: break-all; font-family: ui-monospace, monospace; font-size: 12px; color: #fff;" id="drive-modal-display-url">
+        ${currentUrl}
+      </div>
+
+      <div id="drive-edit-container" style="display: none; flex-direction: column; gap: 8px;">
+        <label style="font-size: 11px; font-weight: 700; color: var(--text-tertiary); text-transform: uppercase;">
+          Enter New Google Drive Folder Link:
+        </label>
+        <input type="text" class="simple-input" id="input-new-drive-url" value="${currentUrl}" placeholder="https://drive.google.com/drive/folders/..." style="font-size: 13px; padding: 10px 12px;" />
+        <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px;">
+          <button class="apple-btn" id="btn-cancel-edit-drive" style="padding: 6px 12px; font-size: 12px;">Cancel Edit</button>
+          <button class="apple-btn apple-btn-primary" id="btn-save-edit-drive" style="padding: 6px 14px; font-size: 12px; font-weight: 600;">Save Location</button>
+        </div>
+      </div>
+
+      <!-- Action buttons: Cancel on left, Change and Open on right -->
+      <div id="drive-actions-row" style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px;">
+        <button class="apple-btn" id="btn-drive-dialog-cancel">Cancel</button>
+        <div style="display: flex; gap: 8px;">
+          <button class="apple-btn" id="btn-drive-dialog-change">Change</button>
+          <button class="apple-btn apple-btn-primary" id="btn-drive-dialog-open" style="font-weight: 600;">Open</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  const btnClose = modal.querySelector('#btn-drive-dialog-close');
+  const btnCancel = modal.querySelector('#btn-drive-dialog-cancel');
+  const btnOpen = modal.querySelector('#btn-drive-dialog-open');
+  const btnChange = modal.querySelector('#btn-drive-dialog-change');
+  const editContainer = modal.querySelector('#drive-edit-container');
+  const actionsRow = modal.querySelector('#drive-actions-row');
+  const inputNewDriveUrl = modal.querySelector('#input-new-drive-url');
+  const displayUrl = modal.querySelector('#drive-modal-display-url');
+  const btnCancelEdit = modal.querySelector('#btn-cancel-edit-drive');
+  const btnSaveEdit = modal.querySelector('#btn-save-edit-drive');
+
+  const closeModal = () => modal.remove();
+
+  btnClose.onclick = closeModal;
+  btnCancel.onclick = closeModal;
+  modal.onclick = (e) => {
+    if (e.target === modal) closeModal();
+  };
+
+  btnOpen.onclick = () => {
+    window.open(store.getDriveLocation(), '_blank');
+    closeModal();
+  };
+
+  btnChange.onclick = () => {
+    editContainer.style.display = 'flex';
+    actionsRow.style.display = 'none';
+    inputNewDriveUrl.focus();
+    inputNewDriveUrl.select();
+  };
+
+  btnCancelEdit.onclick = () => {
+    editContainer.style.display = 'none';
+    actionsRow.style.display = 'flex';
+    inputNewDriveUrl.value = store.getDriveLocation();
+  };
+
+  const saveLocation = () => {
+    const val = inputNewDriveUrl.value.trim();
+    if (val) {
+      store.setDriveLocation(val);
+      displayUrl.textContent = val;
+    }
+    editContainer.style.display = 'none';
+    actionsRow.style.display = 'flex';
+  };
+
+  btnSaveEdit.onclick = saveLocation;
+  inputNewDriveUrl.onkeydown = (e) => {
+    if (e.key === 'Enter') saveLocation();
+    if (e.key === 'Escape') btnCancelEdit.onclick();
+  };
 }
