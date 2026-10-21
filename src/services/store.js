@@ -72,6 +72,7 @@ const DEFAULT_STATE = {
       highlights: [
         {
           id: 'h_1',
+          type: 'player',
           set: 1,
           score: '14 - 12',
           label: '🔥 Ace!',
@@ -85,6 +86,7 @@ const DEFAULT_STATE = {
         },
         {
           id: 'h_2',
+          type: 'team',
           set: 1,
           score: '24 - 23',
           label: '💪 Big Block!',
@@ -93,10 +95,12 @@ const DEFAULT_STATE = {
           driveUrl: 'https://drive.google.com/file/d/drive_h_2/view',
           fileSizeBytes: 3500000,
           isUploading: false,
+          isStarred: true, // Blue filled star for team highlight!
           timestamp: Date.now() - 900000
         },
         {
           id: 'h_3',
+          type: 'player',
           set: 2,
           score: '18 - 16',
           label: '💣 Crazy Kill',
@@ -105,6 +109,7 @@ const DEFAULT_STATE = {
           driveUrl: 'https://drive.google.com/file/d/drive_h_3/view',
           fileSizeBytes: 3300000,
           isUploading: true, // Show the uploading state requested!
+          isStarred: false, // Gold outline for unstarred player highlight!
           timestamp: Date.now() - 60000
         }
       ]
@@ -124,6 +129,7 @@ const DEFAULT_STATE = {
       highlights: [
         {
           id: 'h_w1',
+          type: 'player',
           set: 1,
           score: '19 - 17',
           label: '⛏️ Amazing Dig',
@@ -132,10 +138,12 @@ const DEFAULT_STATE = {
           driveUrl: 'https://drive.google.com/file/d/drive_h_w1/view',
           fileSizeBytes: 3400000,
           isUploading: false,
+          isStarred: false,
           timestamp: 1729267200000
         },
         {
           id: 'h_w2',
+          type: 'team',
           set: 3,
           score: '14 - 11',
           label: '🎯 Cool Set',
@@ -144,7 +152,8 @@ const DEFAULT_STATE = {
           driveUrl: 'https://drive.google.com/file/d/drive_h_w2/view',
           fileSizeBytes: 3600000,
           isUploading: false,
-          timestamp: 1729270800000
+          isStarred: false,
+          timestamp: 1729269000000
         }
       ],
       comments: [
@@ -195,6 +204,8 @@ class GameStore {
   constructor() {
     this.listeners = new Set();
     this.state = this.loadState();
+    this.pointBuffer = null;
+    this.initPointBuffers();
   }
 
   loadState() {
@@ -212,7 +223,7 @@ class GameStore {
             merged.activeMatch.setsThem = 0;
             merged.activeMatch.currentSet = 1;
           }
-          // Ensure all matches and clips have archive, finished & drive properties, and sort highlights chronologically
+          // Ensure all matches and clips have archive, finished, drive & type properties, and sort highlights chronologically
           for (const match of (merged.matches || [])) {
             match.highlights = sortHighlightsChronologically(match.highlights || []);
             if (typeof match.isArchived === 'undefined') {
@@ -222,6 +233,7 @@ class GameStore {
               match.isFinished = (match.id !== 'demo-live' && !match.isLive);
             }
             for (const clip of (match.highlights || [])) {
+              if (!clip.type) clip.type = 'player';
               if (!clip.fileSizeBytes) clip.fileSizeBytes = 3400000;
               if (!clip.driveFileId) clip.driveFileId = 'drive_' + clip.id;
               if (!clip.driveUrl) clip.driveUrl = `https://drive.google.com/file/d/${clip.driveFileId}/view`;
@@ -297,6 +309,99 @@ class GameStore {
     return matchEntry;
   }
 
+  // --- Point Ring-Buffer & 5-Second Grace Period Management ---
+
+  initPointBuffers() {
+    const m = this.state.activeMatch || {};
+    const now = Date.now();
+    if (this.pointBuffer && this.pointBuffer.graceTimer) {
+      clearTimeout(this.pointBuffer.graceTimer);
+    }
+    this.pointBuffer = {
+      current: {
+        id: 'pt_' + now + '_' + Math.random().toString(36).substr(2, 6),
+        set: m.currentSet || 1,
+        scoreAtStart: `${m.scoreUs || 0} - ${m.scoreThem || 0}`,
+        scoreCurrent: `${m.scoreUs || 0} - ${m.scoreThem || 0}`,
+        startTime: now,
+        lastScoreActionTimestamp: null,
+        pendingHighlight: null
+      },
+      previous: this.pointBuffer ? this.pointBuffer.previous : null,
+      graceTimer: null
+    };
+  }
+
+  // Called every time the score changes
+  onScoreAction(actionTimestamp = Date.now()) {
+    if (!this.pointBuffer) this.initPointBuffers();
+
+    const m = this.state.activeMatch;
+    const cur = this.pointBuffer.current;
+
+    // Record the timestamp of this latest score update
+    cur.lastScoreActionTimestamp = actionTimestamp;
+    cur.scoreCurrent = `${m.scoreUs} - ${m.scoreThem}`;
+
+    // Reset 5s grace period timer if running (handles rapid undos/corrections/catch-ups)
+    if (this.pointBuffer.graceTimer) {
+      clearTimeout(this.pointBuffer.graceTimer);
+      this.pointBuffer.graceTimer = null;
+    }
+
+    // 5-second grace period before accepting this time mark as the official highlight closure point
+    this.pointBuffer.graceTimer = setTimeout(() => {
+      this.finalizePointBoundary();
+    }, 5000);
+  }
+
+  // Finalizes the current point buffer and rotates it to previousPoint
+  finalizePointBoundary() {
+    if (!this.pointBuffer) return;
+    if (this.pointBuffer.graceTimer) {
+      clearTimeout(this.pointBuffer.graceTimer);
+      this.pointBuffer.graceTimer = null;
+    }
+
+    const cur = this.pointBuffer.current;
+    const m = this.state.activeMatch;
+    const endTime = cur.lastScoreActionTimestamp || Date.now();
+
+    const completedPoint = {
+      ...cur,
+      endTime: endTime,
+      finalScore: `${m.scoreUs} - ${m.scoreThem}`,
+      finalSet: m.currentSet
+    };
+
+    // If broadcaster highlighted "Current Pt." mid-point, finalize and save the clip now!
+    if (cur.pendingHighlight) {
+      this.saveHighlightClip({
+        type: cur.pendingHighlight.type,
+        label: cur.pendingHighlight.label,
+        set: completedPoint.finalSet,
+        score: completedPoint.finalScore,
+        videoBlobOrUrl: cur.pendingHighlight.videoBlobOrUrl,
+        timestamp: endTime
+      });
+      cur.pendingHighlight = null;
+    }
+
+    // Rotate: completed point becomes previous point
+    this.pointBuffer.previous = completedPoint;
+
+    // Start fresh current point
+    this.pointBuffer.current = {
+      id: 'pt_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+      set: m.currentSet,
+      scoreAtStart: `${m.scoreUs} - ${m.scoreThem}`,
+      scoreCurrent: `${m.scoreUs} - ${m.scoreThem}`,
+      startTime: endTime,
+      lastScoreActionTimestamp: null,
+      pendingHighlight: null
+    };
+  }
+
   // --- Broadcaster Score Controls ---
 
   // Tap or swipe on the left/right screen
@@ -309,10 +414,14 @@ class GameStore {
       const next = Math.max(0, Number(this.state.activeMatch.scoreThem || 0) + delta);
       this.state.activeMatch.scoreThem = next;
     }
-    this.state.activeMatch.lastScoreTimestamp = Date.now();
+    const now = Date.now();
+    this.state.activeMatch.lastScoreTimestamp = now;
     this.syncActiveMatchToArchive(false);
     this.triggerHaptic(delta > 0 ? 'light' : 'double');
     this.saveState();
+
+    // Trigger 5-second grace period on the point buffer
+    this.onScoreAction(now);
   }
 
   resetScores() {
@@ -320,6 +429,7 @@ class GameStore {
     this.state.activeMatch.scoreThem = 0;
     this.state.activeMatch.lastScoreTimestamp = Date.now();
     this.syncActiveMatchToArchive(false);
+    this.initPointBuffers();
     this.triggerHaptic('medium');
     this.saveState();
   }
@@ -332,6 +442,10 @@ class GameStore {
   }
 
   advanceSet() {
+    if (this.pointBuffer && this.pointBuffer.graceTimer) {
+      this.finalizePointBoundary();
+    }
+
     const m = this.state.activeMatch;
     const prevSet = m.currentSet;
     const finalUs = m.scoreUs;
@@ -361,6 +475,7 @@ class GameStore {
     m.scoreThem = 0;
     m.lastScoreTimestamp = Date.now();
     this.syncActiveMatchToArchive(false);
+    this.initPointBuffers();
     this.triggerHaptic('heavy');
     this.saveState();
   }
@@ -375,6 +490,9 @@ class GameStore {
 
   // Pause broadcast (match still in progress, can be resumed)
   pauseBroadcast() {
+    if (this.pointBuffer && this.pointBuffer.graceTimer) {
+      this.finalizePointBoundary();
+    }
     this.state.activeMatch.isLive = false;
     this.state.activeMatch.isFinished = false;
     this.syncActiveMatchToArchive(false);
@@ -383,6 +501,10 @@ class GameStore {
 
   // Finish match, log final set score, save complete comment transcript to archive
   finishMatch() {
+    if (this.pointBuffer && this.pointBuffer.graceTimer) {
+      this.finalizePointBoundary();
+    }
+
     const m = this.state.activeMatch;
     const prevSet = m.currentSet;
     const finalUs = m.scoreUs;
@@ -428,61 +550,113 @@ class GameStore {
     this.saveState();
   }
 
-  // --- Highlights Engine ---
+  // --- Highlights Engine with Player vs Team & Current vs Previous Point ---
 
-  triggerHighlight(chosenLabel = null, videoBlobOrUrl = null) {
+  // Trigger point highlight (current or previous point, player or team)
+  triggerPointHighlight({ type = 'player', label = 'Highlight', target = 'current', videoBlobOrUrl = null }) {
+    if (!this.pointBuffer) this.initPointBuffers();
+
     const m = this.state.activeMatch;
-    const cheer = this.state.recentCheerPill;
-    const label = chosenLabel || (cheer ? cheer.text : 'Highlight');
 
-    const clipId = 'h_' + Date.now();
+    if (target === 'previous') {
+      const prev = this.pointBuffer.previous;
+      if (prev) {
+        return this.saveHighlightClip({
+          type,
+          label,
+          set: prev.finalSet || prev.set || m.currentSet,
+          score: prev.finalScore || prev.scoreCurrent || `${m.scoreUs} - ${m.scoreThem}`,
+          videoBlobOrUrl,
+          timestamp: prev.endTime || Date.now()
+        });
+      } else {
+        // Fallback if no previous point exists yet (first rally of match)
+        return this.saveHighlightClip({
+          type,
+          label,
+          set: m.currentSet,
+          score: `${m.scoreUs} - ${m.scoreThem}`,
+          videoBlobOrUrl,
+          timestamp: Date.now()
+        });
+      }
+    } else {
+      // Current point highlight:
+      const cur = this.pointBuffer.current;
+      cur.pendingHighlight = {
+        type,
+        label,
+        videoBlobOrUrl,
+        requestedAt: Date.now()
+      };
+
+      // Auto-post highlight event to chat so viewers see it immediately
+      this.state.chat.push({
+        id: 'c_' + Date.now(),
+        sender: 'Broadcaster',
+        text: `⚡ ${type === 'player' ? 'Player' : 'Team'} Highlight: ${label}`,
+        set: m.currentSet,
+        score: `${m.scoreUs} - ${m.scoreThem}`,
+        timestamp: Date.now(),
+        isCheer: true
+      });
+      this.saveState();
+      this.triggerHaptic('double');
+
+      return {
+        isPending: true,
+        type,
+        label,
+        target: 'current'
+      };
+    }
+  }
+
+  // Save highlight clip to match archive
+  saveHighlightClip({ type = 'player', label = 'Highlight', set = 1, score = '0 - 0', videoBlobOrUrl = null, timestamp = Date.now() }) {
+    const m = this.state.activeMatch;
+    const clipId = 'h_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
     const driveId = 'drive_' + clipId;
     const newClip = {
       id: clipId,
-      set: m.currentSet,
-      score: `${m.scoreUs} - ${m.scoreThem}`,
+      type: type, // 'player' or 'team'
+      set: set,
+      score: score,
       label: label,
       videoUrl: videoBlobOrUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
       driveFileId: driveId,
       driveUrl: `https://drive.google.com/file/d/${driveId}/view`,
       fileSizeBytes: 3400000,
       isUploading: true,
-      timestamp: Date.now()
+      isStarred: false,
+      timestamp: timestamp
     };
-
-    // Auto-post highlight pill to chat so viewers see it live
-    this.state.chat.push({
-      id: 'c_' + Date.now(),
-      sender: 'Broadcaster',
-      text: `⚡ Highlight: ${label}`,
-      set: m.currentSet,
-      score: `${m.scoreUs} - ${m.scoreThem}`,
-      timestamp: Date.now(),
-      isCheer: true
-    });
 
     // Find current active match in matches list or add it
     let matchEntry = this.state.matches.find(item => item.id === m.id);
     if (!matchEntry) {
-      matchEntry = {
-        id: m.id,
-        date: m.date,
-        opponent: m.opponent,
-        isLive: m.isLive,
-        setsUs: m.setsUs,
-        setsThem: m.setsThem,
-        currentSet: m.currentSet,
-        scoreUs: m.scoreUs,
-        scoreThem: m.scoreThem,
-        highlights: []
-      };
-      this.state.matches.unshift(matchEntry);
+      matchEntry = this.syncActiveMatchToArchive(false);
     }
 
     matchEntry.highlights.push(newClip);
     matchEntry.highlights = sortHighlightsChronologically(matchEntry.highlights);
     this.triggerHaptic('double');
     this.saveState();
+
+    // Auto-post to chat if not already queued
+    const alreadyPosted = this.state.chat.some(c => c.text && c.text.includes(label) && Date.now() - c.timestamp < 6000);
+    if (!alreadyPosted) {
+      this.state.chat.push({
+        id: 'c_' + Date.now(),
+        sender: 'Broadcaster',
+        text: `⚡ ${type === 'player' ? 'Player' : 'Team'} Highlight: ${label}`,
+        set: set,
+        score: score,
+        timestamp: Date.now(),
+        isCheer: true
+      });
+      this.saveState();
+    }
 
     // Simulate background throttled upload finishing after 4 seconds
     setTimeout(() => {
@@ -491,6 +665,17 @@ class GameStore {
     }, 4000);
 
     return newClip;
+  }
+
+  // Backwards compatibility alias for triggerHighlight
+  triggerHighlight(chosenLabel = null, videoBlobOrUrl = null, type = 'player') {
+    return this.saveHighlightClip({
+      type,
+      label: chosenLabel || 'Highlight',
+      set: this.state.activeMatch.currentSet,
+      score: `${this.state.activeMatch.scoreUs} - ${this.state.activeMatch.scoreThem}`,
+      videoBlobOrUrl
+    });
   }
 
   toggleStarHighlight(matchId, clipId) {
@@ -502,7 +687,10 @@ class GameStore {
     clip.isStarred = !clip.isStarred;
     this.triggerHaptic('light');
     this.saveState();
-    return clip.isStarred;
+    return {
+      isStarred: clip.isStarred,
+      type: clip.type || 'player'
+    };
   }
 
   // --- Chat & Cheer Drawer ---
@@ -567,6 +755,7 @@ class GameStore {
     };
     match.isLive = true;
     match.isFinished = false;
+    this.initPointBuffers();
     this.saveState();
   }
 
@@ -617,6 +806,7 @@ class GameStore {
       highlights: []
     });
 
+    this.initPointBuffers();
     this.saveState();
   }
 
@@ -643,6 +833,7 @@ class GameStore {
       demo.isLive = true;
       demo.isFinished = false;
     }
+    this.initPointBuffers();
     this.saveState();
   }
 

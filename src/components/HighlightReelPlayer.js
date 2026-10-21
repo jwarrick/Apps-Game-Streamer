@@ -267,7 +267,13 @@ export class HighlightReelPlayer {
 
     if (scoreElem) scoreElem.textContent = clip.score || '0 - 0';
     if (setElem) setElem.textContent = `Set ${clip.set || 1}`;
-    if (labelElem) labelElem.textContent = clip.label || 'Highlight';
+    if (labelElem) {
+      const isTeam = (clip.type === 'team');
+      labelElem.textContent = `${isTeam ? '👥 Team' : '⭐ Player'}: ${clip.label || 'Highlight'}`;
+      labelElem.style.borderColor = isTeam ? 'rgba(10, 132, 255, 0.45)' : 'rgba(255, 214, 10, 0.45)';
+      labelElem.style.color = isTeam ? '#60A5FA' : 'var(--accent-gold)';
+      labelElem.style.background = isTeam ? 'rgba(10, 132, 255, 0.16)' : 'rgba(255, 214, 10, 0.16)';
+    }
     if (opponentElem) opponentElem.textContent = `vs. ${this.match.opponent}`;
 
     // Play next video

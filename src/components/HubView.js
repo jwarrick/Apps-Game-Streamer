@@ -156,7 +156,7 @@ export function renderHubView(container, navigate) {
                   ` : sortHighlightsChronologically(m.highlights).map(h => `
                     <div class="highlight-row">
                       <div class="highlight-left">
-                        <button class="btn-star-clip ${h.isStarred ? 'starred' : ''}" data-clip-id="${h.id}" data-match-id="${m.id}" title="${h.isStarred ? 'Starred highlight (Click to unstar)' : 'Star this highlight'}" aria-label="Star highlight">
+                        <button class="btn-star-clip ${h.type || 'player'} ${h.isStarred ? 'starred' : ''}" data-clip-id="${h.id}" data-match-id="${m.id}" data-type="${h.type || 'player'}" title="${h.type === 'team' ? (h.isStarred ? 'Starred Team Highlight (Click to unstar)' : 'Star Team Highlight') : (h.isStarred ? 'Starred Player Highlight (Click to unstar)' : 'Star Player Highlight')}" aria-label="Star highlight">
                           ${h.isStarred ? '★' : '☆'}
                         </button>
                         <span class="highlight-badge tabular-nums">Set ${h.set} (${h.score})</span>
@@ -281,10 +281,14 @@ export function renderHubView(container, navigate) {
         e.stopPropagation();
         const matchId = btn.dataset.matchId;
         const clipId = btn.dataset.clipId;
-        const isStarred = store.toggleStarHighlight(matchId, clipId);
+        const res = store.toggleStarHighlight(matchId, clipId);
+        const isStarred = (typeof res === 'object') ? res.isStarred : res;
+        const type = (typeof res === 'object') ? res.type : (btn.dataset.type || 'player');
         btn.classList.toggle('starred', isStarred);
         btn.innerHTML = isStarred ? '★' : '☆';
-        btn.title = isStarred ? 'Starred highlight (Click to unstar)' : 'Star this highlight';
+        btn.title = isStarred
+          ? (type === 'team' ? 'Starred Team Highlight (Click to unstar)' : 'Starred Player Highlight (Click to unstar)')
+          : (type === 'team' ? 'Star Team Highlight' : 'Star Player Highlight');
       };
     });
 

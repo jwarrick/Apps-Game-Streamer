@@ -44,9 +44,14 @@ export function renderStreamerView(container, navigate) {
           SET 1
         </button>
 
-        <button class="apple-btn btn-highlight" id="btn-trigger-highlight">
-          ⚡ HIGHLIGHT
-        </button>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <button class="apple-btn btn-highlight-player" id="btn-highlight-player" title="Player Highlight (Son/Daughter)">
+            Player ★
+          </button>
+          <button class="apple-btn btn-highlight-team" id="btn-highlight-team" title="Team Highlight (Rally)">
+            Team ★
+          </button>
+        </div>
       </header>
 
       <!-- Bottom Score Row (No Boxes, Clean Text, Scores in Outer Corners) -->
@@ -99,14 +104,29 @@ export function renderStreamerView(container, navigate) {
         </div>
       </div>
 
-      <!-- Highlight Pill Picker Modal (Appears when ⚡ HIGHLIGHT is pressed) -->
+      <!-- Highlight Pill Picker Modal (Appears when Player ★ or Team ★ is pressed) -->
       <div class="highlight-pill-backdrop" id="highlight-pill-modal" style="display: none;">
-        <div class="highlight-pill-dialog">
+        <div class="highlight-pill-dialog" style="max-width: 360px;">
           <div style="display: flex; align-items: center; justify-content: space-between;">
-            <h3 style="font-size: 16px; font-weight: 700;">Select Highlight Type</h3>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span id="highlight-modal-badge" style="font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 6px; letter-spacing: 0.5px; background: rgba(255,214,10,0.2); color: var(--accent-gold); border: 1px solid var(--accent-gold);">PLAYER ★</span>
+              <h3 style="font-size: 16px; font-weight: 700;">Select Highlight</h3>
+            </div>
             <button class="apple-btn" id="btn-cancel-highlight" style="padding: 4px 10px; font-size: 12px;">✕</button>
           </div>
-          <p style="font-size: 12px; color: var(--text-secondary);">Choose a highlight tag to save and label the rally:</p>
+
+          <!-- Current Pt. vs Previous Pt. Toggle -->
+          <div style="margin: 12px 0; padding: 10px 12px; background: rgba(255, 255, 255, 0.05); border-radius: 10px; border: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between;">
+            <div>
+              <div style="font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Target Point</div>
+              <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;" id="highlight-target-hint">Rally currently in play</div>
+            </div>
+            <button class="apple-btn" id="btn-toggle-point-target" style="padding: 6px 14px; font-size: 13px; font-weight: 700; border-radius: 8px; background: rgba(255,255,255,0.12); color: #fff; border: 1px solid rgba(255,255,255,0.3);">
+              Current Pt.
+            </button>
+          </div>
+
+          <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">Choose tag to confirm and save clip:</p>
 
           <div class="highlight-pill-grid">
             <button class="apple-btn btn-highlight-select" data-label="⛏️ Amazing Dig">⛏️ Amazing Dig</button>
@@ -181,7 +201,14 @@ export function renderStreamerView(container, navigate) {
   const hintLeft = container.querySelector('#hint-left');
   const hintRight = container.querySelector('#hint-right');
   const btnSet = container.querySelector('#btn-set-counter');
-  const btnHighlight = container.querySelector('#btn-trigger-highlight');
+  const btnHighlightPlayer = container.querySelector('#btn-highlight-player');
+  const btnHighlightTeam = container.querySelector('#btn-highlight-team');
+  const highlightModalBadge = container.querySelector('#highlight-modal-badge');
+  const btnTogglePointTarget = container.querySelector('#btn-toggle-point-target');
+  const highlightTargetHint = container.querySelector('#highlight-target-hint');
+  let chosenHighlightType = 'player';
+  let highlightPointTarget = 'current';
+  let activeTriggerBtn = btnHighlightPlayer;
   const btnSwap = container.querySelector('#btn-swap-sides');
   const btnEnd = container.querySelector('#btn-end-stream');
 
@@ -440,10 +467,46 @@ export function renderStreamerView(container, navigate) {
     if (e.target === exitModal) closeExitModal();
   };
 
-  // --- 5. Highlight Pill Picker Trigger ---
-  btnHighlight.onclick = (e) => {
+  // --- 5. Highlight Pill Picker Trigger (Player ★ vs Team ★, Current vs Previous Pt) ---
+  btnHighlightPlayer.onclick = (e) => {
     e.stopPropagation();
+    chosenHighlightType = 'player';
+    highlightPointTarget = 'current';
+    activeTriggerBtn = btnHighlightPlayer;
+    highlightModalBadge.textContent = 'PLAYER ★';
+    highlightModalBadge.style.color = 'var(--accent-gold)';
+    highlightModalBadge.style.borderColor = 'var(--accent-gold)';
+    highlightModalBadge.style.background = 'rgba(255, 214, 10, 0.2)';
+    btnTogglePointTarget.textContent = 'Current Pt.';
+    highlightTargetHint.textContent = 'Rally currently in play (saves once point finishes)';
     highlightModal.style.display = 'flex';
+  };
+
+  btnHighlightTeam.onclick = (e) => {
+    e.stopPropagation();
+    chosenHighlightType = 'team';
+    highlightPointTarget = 'current';
+    activeTriggerBtn = btnHighlightTeam;
+    highlightModalBadge.textContent = 'TEAM ★';
+    highlightModalBadge.style.color = '#0A84FF';
+    highlightModalBadge.style.borderColor = '#0A84FF';
+    highlightModalBadge.style.background = 'rgba(10, 132, 255, 0.2)';
+    btnTogglePointTarget.textContent = 'Current Pt.';
+    highlightTargetHint.textContent = 'Rally currently in play (saves once point finishes)';
+    highlightModal.style.display = 'flex';
+  };
+
+  btnTogglePointTarget.onclick = (e) => {
+    e.stopPropagation();
+    if (highlightPointTarget === 'current') {
+      highlightPointTarget = 'previous';
+      btnTogglePointTarget.textContent = 'Previous Pt.';
+      highlightTargetHint.textContent = 'Prior rally (saves footage of previous point)';
+    } else {
+      highlightPointTarget = 'current';
+      btnTogglePointTarget.textContent = 'Current Pt.';
+      highlightTargetHint.textContent = 'Rally currently in play (saves once point finishes)';
+    }
   };
 
   btnCancelHighlight.onclick = (e) => {
@@ -461,16 +524,31 @@ export function renderStreamerView(container, navigate) {
     btn.onclick = (e) => {
       e.stopPropagation();
       const label = btn.dataset.label;
-      store.triggerHighlight(label);
+      const target = highlightPointTarget;
+      const type = chosenHighlightType;
+
+      store.triggerPointHighlight({
+        type: type,
+        label: label,
+        target: target
+      });
+
       highlightModal.style.display = 'none';
 
-      btnHighlight.style.transform = 'scale(1.15)';
-      btnHighlight.textContent = '✓ SAVED!';
-      flashHint(hintLeft, label, 'gold');
-      setTimeout(() => {
-        btnHighlight.style.transform = 'scale(1)';
-        btnHighlight.textContent = '⚡ HIGHLIGHT';
-      }, 1200);
+      // Confirmation message on button as requested: "Prev. Pt. Highlighted." vs. "Current Pt. Highlighted"
+      const confirmText = (target === 'previous') ? 'Prev. Pt. Highlighted' : 'Current Pt. Highlighted';
+      const originalText = (type === 'player') ? 'Player ★' : 'Team ★';
+
+      if (activeTriggerBtn) {
+        activeTriggerBtn.style.transform = 'scale(1.08)';
+        activeTriggerBtn.textContent = `✓ ${confirmText}`;
+        flashHint(hintLeft, `${type.toUpperCase()}: ${label}`, type === 'player' ? 'gold' : 'blue');
+
+        setTimeout(() => {
+          activeTriggerBtn.style.transform = 'scale(1)';
+          activeTriggerBtn.textContent = originalText;
+        }, 2400);
+      }
     };
   });
 
