@@ -109,10 +109,10 @@
 
 - **Top Row**:
   - `🔴 LIVE (3)` — status and viewer count.
-  - `[ SET 1 ]` — tap to advance set (resets score to `0 - 0`, logs set winner).
-  - `[⚡ HIGHLIGHT]` — saves clip from last point change to current tap.
+  - `[ SET 1 ]` — tap to advance set (resets score to `0 - 0`, logs set winner). Automatically detects mathematical set victory (25 pts with 2-pt lead for Sets 1-2, or 15 pts in Set 3+) and pulses with a **glowing gold ring** (`SET 1 ★`). Advancing the set automatically logs the final set score into the chat stream!
+  - `[⚡ HIGHLIGHT]` — opens pill picker to save and label clip with chosen comment.
 - **Bottom Row**:
-  - `US <score1>` (left), `[⇄]` Swap button (center midline), `THEM <score2>` (right).
+  - `<score> US` (left corner), `[⇄]` Swap button (pinned strictly to center midline), `<OPPONENT> <score>` (right corner).
 - **Primary Viewing Region**:
   - Entire left half controls left score (Tap +1, Swipe Down -1).
   - Entire right half controls right score (Tap +1, Swipe Down -1).
