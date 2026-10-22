@@ -2,7 +2,7 @@
 // HubView: Main Family Hub & Unified Match Archive
 // ==========================================================================
 
-import { store, sortHighlightsChronologically } from '../services/store.js';
+import { store, sortHighlightsChronologically, formatTennisSetScores, getTennisPointDisplay } from '../services/store.js';
 import { ReplayPlayer } from './ReplayPlayer.js';
 import { HighlightReelPlayer } from './HighlightReelPlayer.js';
 import { authService } from '../services/auth.js';
@@ -20,7 +20,9 @@ export function renderHubView(container, navigate) {
         <!-- Header -->
         <header class="hub-header">
           <div class="hub-brand">
-            <span style="font-size: 24px;">🏐</span>
+            <span style="font-size: 22px; display: inline-flex; align-items: center; gap: 2px;">
+              <span>🏐</span><span>🎾</span>
+            </span>
             <h1>Game Streamer</h1>
           </div>
           <div style="display: flex; gap: 8px;">
@@ -41,17 +43,56 @@ export function renderHubView(container, navigate) {
                 ${getBroadcastIcon(14, 'var(--accent-red)')}
                 <span>Live Now</span>
               </span>
-              <span class="tabular-nums" style="font-size: 13px; color: var(--text-secondary);">${active.viewers} watching</span>
+              <span class="sport-badge-card ${active.sport === 'tennis' ? 'tennis' : 'volleyball'}">
+                ${active.sport === 'tennis' ? '🎾 Tennis' : '🏐 Volleyball'}
+              </span>
+              <span class="tabular-nums" style="font-size: 13px; color: var(--text-secondary); margin-left: auto;">${active.viewers} watching</span>
             </div>
 
             <div class="live-matchup-title">vs. ${active.opponent}</div>
 
-            <div class="live-score-strip tabular-nums">
-              <span>${active.scoreUs}</span>
-              <span style="color: var(--text-tertiary); font-weight: 300;">-</span>
-              <span>${active.scoreThem}</span>
-              <span class="live-score-sets">(Set ${active.currentSet} • Sets: ${active.setsUs}-${active.setsThem})</span>
-            </div>
+            ${active.sport === 'tennis' ? (() => {
+              const ptDisplay = getTennisPointDisplay(active.pointsUs, active.pointsThem, active.isTiebreak, active.tennisScoringType);
+              return `
+                <div style="margin: 8px 0 12px 0;">
+                  <div class="tennis-tv-scoreboard" style="max-width: 320px;">
+                    <div class="tennis-row">
+                      <div class="tennis-row-team">
+                        <span class="tennis-server-indicator ${active.server === 'us' ? 'active' : ''}">🎾</span>
+                        <span class="tennis-team-name" title="${active.teamName || 'US'}">${active.teamName || 'US'}</span>
+                      </div>
+                      <div class="tennis-sets-wrap">
+                        ${(active.setScores || []).map(set => `
+                          <div class="tennis-set-cell">${set.us !== undefined ? set.us : (set.score ? set.score.split('-')[0] : '?')}</div>
+                        `).join('')}
+                        ${active.currentSetFormat !== 'tiebreak-10' && active.currentSetFormat !== 'tiebreak-7' ? `<div class="tennis-set-cell current">${active.gamesUs || 0}</div>` : ''}
+                      </div>
+                      <div class="tennis-point-cell tabular-nums">${ptDisplay.us}</div>
+                    </div>
+                    <div class="tennis-row">
+                      <div class="tennis-row-team">
+                        <span class="tennis-server-indicator ${active.server === 'them' ? 'active' : ''}">🎾</span>
+                        <span class="tennis-team-name" title="${active.opponent || 'OPPONENT'}">${active.opponent || 'OPPONENT'}</span>
+                      </div>
+                      <div class="tennis-sets-wrap">
+                        ${(active.setScores || []).map(set => `
+                          <div class="tennis-set-cell">${set.them !== undefined ? set.them : (set.score ? set.score.split('-')[1] : '?')}</div>
+                        `).join('')}
+                        ${active.currentSetFormat !== 'tiebreak-10' && active.currentSetFormat !== 'tiebreak-7' ? `<div class="tennis-set-cell current">${active.gamesThem || 0}</div>` : ''}
+                      </div>
+                      <div class="tennis-point-cell tabular-nums">${ptDisplay.them}</div>
+                    </div>
+                  </div>
+                </div>
+              `;
+            })() : `
+              <div class="live-score-strip tabular-nums">
+                <span>${active.scoreUs}</span>
+                <span style="color: var(--text-tertiary); font-weight: 300;">-</span>
+                <span>${active.scoreThem}</span>
+                <span class="live-score-sets">(Set ${active.currentSet} • Sets: ${active.setsUs}-${active.setsThem})</span>
+              </div>
+            `}
 
             <button class="apple-btn apple-btn-primary btn-watch-live" id="btn-watch-live">
               ▶ Tap to Watch Live Game
@@ -110,11 +151,18 @@ export function renderHubView(container, navigate) {
               <div class="match-card frosted-glass">
                 <div class="match-card-header" data-id="${m.id}">
                   <div class="match-info-main">
-                    <div class="match-title">
-                      ${m.date} vs. ${m.opponent}
+                    <div class="match-title" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                      <span class="sport-badge-card ${m.sport === 'tennis' ? 'tennis' : 'volleyball'}">
+                        ${m.sport === 'tennis' ? '🎾 Tennis' : '🏐 Volleyball'}
+                      </span>
+                      <span>${m.date} vs. ${m.opponent}</span>
                     </div>
                     <div class="match-meta tabular-nums">
-                      ${m.highlights.length} Highlight${m.highlights.length === 1 ? '' : 's'} • Sets: ${m.setsUs}-${m.setsThem}
+                      ${m.highlights.length} Highlight${m.highlights.length === 1 ? '' : 's'} • ${
+                        m.sport === 'tennis'
+                          ? `Sets: ${formatTennisSetScores(m.setScores) || `${m.setsUs || 0}-${m.setsThem || 0}`}`
+                          : `Sets: ${m.setsUs}-${m.setsThem}`
+                      }
                     </div>
                   </div>
                   <div style="display: flex; align-items: center; gap: 8px;">
@@ -141,11 +189,13 @@ export function renderHubView(container, navigate) {
 
                     ${m.isLive ? `
                       <span class="match-result-badge live">🔴 Live Now</span>
-                    ` : (m.isFinished ? (m.setsUs > m.setsThem ? `
-                      <span class="match-result-badge win">Won ${m.setsUs}-${m.setsThem}</span>
-                    ` : `
-                      <span class="match-result-badge">Final ${m.setsUs}-${m.setsThem}</span>
-                    `) : '')}
+                    ` : (m.isFinished ? (
+                      (m.winner === 'us' || (!m.winner && m.setsUs > m.setsThem)) ? `
+                        <span class="match-result-badge win">Won ${m.sport === 'tennis' ? (formatTennisSetScores(m.setScores) || `${m.setsUs}-${m.setsThem}`) : `${m.setsUs}-${m.setsThem}`}</span>
+                      ` : `
+                        <span class="match-result-badge">Final ${m.sport === 'tennis' ? (formatTennisSetScores(m.setScores) || `${m.setsUs}-${m.setsThem}`) : `${m.setsUs}-${m.setsThem}`}</span>
+                      `
+                    ) : '')}
 
                     <!-- Broadcaster-Only Match Delete Button (Separated with divider to avoid accidental deletion) -->
                     <button class="btn-trash-match" data-match-id="${m.id}" data-opponent="${m.opponent}" data-date="${m.date}" data-clips="${(m.highlights || []).length}" title="Delete Match from Database (Broadcaster only)" aria-label="Delete Match">
@@ -476,19 +526,24 @@ export function renderHubView(container, navigate) {
   return store.subscribe(update);
 }
 
-// Minimalist Opponent Setup Modal once Google Credential is verified
+// Opponent & Sport Setup Modal once Google Credential is verified
 function showMatchSetupModal(navigate, user) {
   const state = store.getState();
   const unfinishedMatch = state.matches.find(m => !m.isFinished);
 
+  let currentSport = localStorage.getItem('gamestreamer_last_sport') || 'volleyball';
+  let tennisScoringType = 'ad'; // 'ad' | 'no-ad'
+  let currentSetFormat = 'standard'; // 'standard' | 'pro8' | 'match_tiebreak_10' | 'tiebreak_7'
+  let initialServer = 'us'; // 'us' | 'them'
   let startingSet = 1;
   let setsUs = 0;
   let setsThem = 0;
+  let tennisPriorSets = []; // Array of { us: 6, them: 4, isUnknown: false, winner: 'us' }
 
   const modal = document.createElement('div');
   modal.className = 'simple-modal-backdrop';
   modal.innerHTML = `
-    <div class="simple-modal" style="max-width: 400px;">
+    <div class="simple-modal" style="max-width: 420px; max-height: 90vh; overflow-y: auto;">
       <div style="display: flex; align-items: center; justify-content: space-between;">
         <h3>Broadcast Setup</h3>
         <span style="font-size: 12px; color: var(--accent-green);">● Verified</span>
@@ -502,11 +557,15 @@ function showMatchSetupModal(navigate, user) {
             <span style="font-size: 11px; font-weight: 800; color: var(--accent-gold); letter-spacing: 1px; text-transform: uppercase;">Match In Progress</span>
             <span style="font-size: 11px; color: var(--text-secondary);">${unfinishedMatch.date}</span>
           </div>
-          <div style="font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 2px;">
-            vs. ${unfinishedMatch.opponent}
+          <div style="font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 2px; display: flex; align-items: center; gap: 8px;">
+            <span class="sport-badge-card ${unfinishedMatch.sport === 'tennis' ? 'tennis' : 'volleyball'}">${unfinishedMatch.sport === 'tennis' ? '🎾 Tennis' : '🏐 Volleyball'}</span>
+            <span>vs. ${unfinishedMatch.opponent}</span>
           </div>
           <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 10px;">
-            Set ${unfinishedMatch.currentSet || 1} • Score: ${unfinishedMatch.scoreUs || 0} - ${unfinishedMatch.scoreThem || 0} • Sets: ${unfinishedMatch.setsUs || 0}-${unfinishedMatch.setsThem || 0} • ${(unfinishedMatch.highlights || []).length} highlights saved
+            ${unfinishedMatch.sport === 'tennis'
+              ? `Set ${unfinishedMatch.currentSet || 1} • Games: ${unfinishedMatch.gamesUs || 0}-${unfinishedMatch.gamesThem || 0} • Sets: ${formatTennisSetScores(unfinishedMatch.setScores) || '0-0'} • ${(unfinishedMatch.highlights || []).length} highlights saved`
+              : `Set ${unfinishedMatch.currentSet || 1} • Score: ${unfinishedMatch.scoreUs || 0} - ${unfinishedMatch.scoreThem || 0} • Sets: ${unfinishedMatch.setsUs || 0}-${unfinishedMatch.setsThem || 0} • ${(unfinishedMatch.highlights || []).length} highlights saved`
+            }
           </div>
           <button class="apple-btn apple-btn-primary" id="btn-resume-in-progress" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; padding: 10px 14px;">
             ${getBroadcastIcon(16, 'currentColor')}
@@ -521,7 +580,22 @@ function showMatchSetupModal(navigate, user) {
         </div>
       ` : ''}
 
-      <!-- Option 2: Start New Match Broadcast -->
+      <!-- Sport Selection Segmented Buttons -->
+      <label style="font-size: 11px; font-weight: 700; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px;">
+        Select Sport:
+      </label>
+      <div class="sport-selector-row">
+        <button class="sport-choice-btn ${currentSport === 'volleyball' ? 'active' : ''}" id="btn-sport-volleyball" type="button">
+          <span class="sport-icon">🏐</span>
+          <span>Volleyball</span>
+        </button>
+        <button class="sport-choice-btn tennis ${currentSport === 'tennis' ? 'active' : ''}" id="btn-sport-tennis" type="button">
+          <span class="sport-icon">🎾</span>
+          <span>Tennis</span>
+        </button>
+      </div>
+
+      <!-- Opponent Name -->
       <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 6px;">
         Opponent Name:
       </label>
@@ -534,6 +608,37 @@ function showMatchSetupModal(navigate, user) {
           ${getBroadcastIcon(16, 'currentColor')}
           <span>Start Stream</span>
         </button>
+      </div>
+
+      <!-- Tennis Rules & Format Box (Only shown if tennis is active) -->
+      <div id="tennis-config-box" style="display: ${currentSport === 'tennis' ? 'block' : 'none'}; border-top: 1px solid var(--border-subtle); margin-top: 18px; padding-top: 14px;">
+        <div style="font-size: 12px; font-weight: 700; color: var(--accent-gold); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; justify-content: space-between;">
+          <span>🎾 Tennis Rules & Server</span>
+          <span style="font-size: 11px; font-weight: 500; color: var(--text-tertiary);">30s buffer auto-set</span>
+        </div>
+
+        <!-- Ad vs No-Ad -->
+        <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 6px;">Game Scoring Mode:</label>
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+          <button class="format-choice-chip ${tennisScoringType === 'ad' ? 'active' : ''}" id="btn-scoring-ad" type="button" style="flex: 1; text-align: center;">Advantage (Ad / Deuce)</button>
+          <button class="format-choice-chip ${tennisScoringType === 'no-ad' ? 'active' : ''}" id="btn-scoring-noad" type="button" style="flex: 1; text-align: center;">No-Ad (Deciding Pt)</button>
+        </div>
+
+        <!-- Set 1 Format -->
+        <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 6px;">Set 1 Format:</label>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px;">
+          <button class="format-choice-chip ${currentSetFormat === 'standard' ? 'active' : ''}" data-format="standard" id="btn-fmt-std" type="button">Standard (6 Games)</button>
+          <button class="format-choice-chip ${currentSetFormat === 'pro8' ? 'active' : ''}" data-format="pro8" id="btn-fmt-pro8" type="button">8-Game Pro Set</button>
+          <button class="format-choice-chip ${currentSetFormat === 'match_tiebreak_10' ? 'active' : ''}" data-format="match_tiebreak_10" id="btn-fmt-tb10" type="button">10-Pt Match TB</button>
+          <button class="format-choice-chip ${currentSetFormat === 'tiebreak_7' ? 'active' : ''}" data-format="tiebreak_7" id="btn-fmt-tb7" type="button">7-Pt Tiebreak</button>
+        </div>
+
+        <!-- Server -->
+        <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 6px;">Initial Server:</label>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn-server-toggle ${initialServer === 'us' ? 'serving' : ''}" id="btn-server-us" type="button">🎾 US Serving</button>
+          <button class="btn-server-toggle ${initialServer === 'them' ? 'serving' : ''}" id="btn-server-them" type="button">🎾 Opponent Serving</button>
+        </div>
       </div>
 
       <!-- Starting Set Stepper (Placed further down as it will rarely be used) -->
@@ -551,8 +656,8 @@ function showMatchSetupModal(navigate, user) {
         </div>
       </div>
 
-      <!-- Prior Sets Won Stepper (Visible if Starting Set > 1) -->
-      <div id="sets-won-row" style="display: none; margin-top: 12px; padding: 12px; background: rgba(255,255,255,0.04); border-radius: 10px; border: 1px solid var(--border-subtle);">
+      <!-- Volleyball Prior Sets Won Stepper (Visible if Starting Set > 1 and sport is volleyball) -->
+      <div id="volleyball-sets-won-row" style="display: none; margin-top: 12px; padding: 12px; background: rgba(255,255,255,0.04); border-radius: 10px; border: 1px solid var(--border-subtle);">
         <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 8px;">
           Prior Sets Won So Far:
         </label>
@@ -575,6 +680,16 @@ function showMatchSetupModal(navigate, user) {
           </div>
         </div>
       </div>
+
+      <!-- Tennis Prior Sets List (Visible if Starting Set > 1 and sport is tennis) -->
+      <div id="tennis-prior-sets-row" style="display: none; margin-top: 12px; padding: 12px; background: rgba(255,255,255,0.04); border-radius: 10px; border: 1px solid var(--border-subtle);">
+        <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 8px;">
+          Prior Set Scores (Tap ? if score unknown):
+        </label>
+        <div id="tennis-prior-sets-list" style="display: flex; flex-direction: column; gap: 8px;">
+          <!-- dynamically rendered -->
+        </div>
+      </div>
     </div>
   `;
 
@@ -585,32 +700,189 @@ function showMatchSetupModal(navigate, user) {
   const inputOpponent = modal.querySelector('#input-opponent');
   const btnResumeInProgress = modal.querySelector('#btn-resume-in-progress');
 
+  const btnSportVolleyball = modal.querySelector('#btn-sport-volleyball');
+  const btnSportTennis = modal.querySelector('#btn-sport-tennis');
+  const tennisConfigBox = modal.querySelector('#tennis-config-box');
+
+  const btnScoringAd = modal.querySelector('#btn-scoring-ad');
+  const btnScoringNoAd = modal.querySelector('#btn-scoring-noad');
+  const formatButtons = modal.querySelectorAll('.format-choice-chip[data-format]');
+  const btnServerUs = modal.querySelector('#btn-server-us');
+  const btnServerThem = modal.querySelector('#btn-server-them');
+
   const btnDecSet = modal.querySelector('#btn-dec-set');
   const btnIncSet = modal.querySelector('#btn-inc-set');
   const txtStartingSet = modal.querySelector('#txt-starting-set');
   const txtSetHint = modal.querySelector('#txt-set-hint');
-  const setsWonRow = modal.querySelector('#sets-won-row');
 
+  const volleyballSetsWonRow = modal.querySelector('#volleyball-sets-won-row');
   const btnDecUsSets = modal.querySelector('#btn-dec-us-sets');
   const btnIncUsSets = modal.querySelector('#btn-inc-us-sets');
   const txtSetsUs = modal.querySelector('#txt-sets-us');
-
   const btnDecThemSets = modal.querySelector('#btn-dec-them-sets');
   const btnIncThemSets = modal.querySelector('#btn-inc-them-sets');
   const txtSetsThem = modal.querySelector('#txt-sets-them');
 
+  const tennisPriorSetsRow = modal.querySelector('#tennis-prior-sets-row');
+  const tennisPriorSetsList = modal.querySelector('#tennis-prior-sets-list');
+
+  // Sport selection handling
+  function setSport(s) {
+    currentSport = s;
+    localStorage.setItem('gamestreamer_last_sport', s);
+    if (s === 'volleyball') {
+      btnSportVolleyball.classList.add('active');
+      btnSportTennis.classList.remove('active');
+      tennisConfigBox.style.display = 'none';
+    } else {
+      btnSportVolleyball.classList.remove('active');
+      btnSportTennis.classList.add('active');
+      tennisConfigBox.style.display = 'block';
+    }
+    updateSetUI();
+  }
+
+  btnSportVolleyball.onclick = () => setSport('volleyball');
+  btnSportTennis.onclick = () => setSport('tennis');
+
+  // Tennis Scoring handling
+  btnScoringAd.onclick = () => {
+    tennisScoringType = 'ad';
+    btnScoringAd.classList.add('active');
+    btnScoringNoAd.classList.remove('active');
+  };
+  btnScoringNoAd.onclick = () => {
+    tennisScoringType = 'no-ad';
+    btnScoringNoAd.classList.add('active');
+    btnScoringAd.classList.remove('active');
+  };
+
+  // Tennis Set 1 Format handling
+  formatButtons.forEach(btn => {
+    btn.onclick = () => {
+      formatButtons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentSetFormat = btn.dataset.format || 'standard';
+    };
+  });
+
+  // Tennis Server handling
+  btnServerUs.onclick = () => {
+    initialServer = 'us';
+    btnServerUs.classList.add('serving');
+    btnServerThem.classList.remove('serving');
+  };
+  btnServerThem.onclick = () => {
+    initialServer = 'them';
+    btnServerThem.classList.add('serving');
+    btnServerUs.classList.remove('serving');
+  };
+
+  // Synchronize Prior Sets list for Tennis
+  function syncTennisPriorSets() {
+    const needed = startingSet - 1;
+    while (tennisPriorSets.length < needed) {
+      tennisPriorSets.push({ us: 6, them: 4, isUnknown: false, winner: 'us' });
+    }
+    while (tennisPriorSets.length > needed) {
+      tennisPriorSets.pop();
+    }
+    renderTennisPriorSetsList();
+  }
+
+  function renderTennisPriorSetsList() {
+    if (!tennisPriorSetsList) return;
+    tennisPriorSetsList.innerHTML = tennisPriorSets.map((s, idx) => `
+      <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.25); border-radius: 8px; padding: 6px 10px; border: 1px solid var(--border-subtle);">
+        <span style="font-size: 13px; font-weight: 700;">Set ${idx + 1}:</span>
+        ${s.isUnknown ? `
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button class="format-choice-chip ${s.winner === 'us' ? 'active' : ''}" data-idx="${idx}" data-action="toggle-winner" type="button" style="padding: 4px 8px; font-size: 11px;">
+              Winner: ${s.winner === 'us' ? 'US' : 'Opponent'}
+            </button>
+            <button class="tennis-unknown-btn active" data-idx="${idx}" data-action="toggle-unknown" type="button" title="Set score unknown (?)" style="padding: 4px 8px; font-size: 11px;">
+              ? Unknown
+            </button>
+          </div>
+        ` : `
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="display: inline-flex; align-items: center; border: 1px solid var(--border-subtle); border-radius: 6px; overflow: hidden;">
+              <button class="tennis-stepper-btn" data-idx="${idx}" data-team="us" data-dir="-1" type="button" style="padding: 2px 7px;">–</button>
+              <span class="tabular-nums" style="padding: 2px 8px; font-weight: 700; font-size: 13px;">${s.us}</span>
+              <button class="tennis-stepper-btn" data-idx="${idx}" data-team="us" data-dir="1" type="button" style="padding: 2px 7px;">+</button>
+            </div>
+            <span style="color: var(--text-tertiary);">-</span>
+            <div style="display: inline-flex; align-items: center; border: 1px solid var(--border-subtle); border-radius: 6px; overflow: hidden;">
+              <button class="tennis-stepper-btn" data-idx="${idx}" data-team="them" data-dir="-1" type="button" style="padding: 2px 7px;">–</button>
+              <span class="tabular-nums" style="padding: 2px 8px; font-weight: 700; font-size: 13px;">${s.them}</span>
+              <button class="tennis-stepper-btn" data-idx="${idx}" data-team="them" data-dir="1" type="button" style="padding: 2px 7px;">+</button>
+            </div>
+            <button class="tennis-unknown-btn" data-idx="${idx}" data-action="toggle-unknown" type="button" title="Mark score as unknown (?)" style="padding: 4px 8px; font-size: 11px;">
+              ?
+            </button>
+          </div>
+        `}
+      </div>
+    `).join('');
+
+    // Wire up prior sets list steppers and toggles
+    tennisPriorSetsList.querySelectorAll('[data-team]').forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const idx = Number(btn.dataset.idx);
+        const team = btn.dataset.team;
+        const dir = Number(btn.dataset.dir);
+        if (tennisPriorSets[idx]) {
+          tennisPriorSets[idx][team] = Math.max(0, Math.min(20, tennisPriorSets[idx][team] + dir));
+          renderTennisPriorSetsList();
+        }
+      };
+    });
+
+    tennisPriorSetsList.querySelectorAll('[data-action="toggle-unknown"]').forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const idx = Number(btn.dataset.idx);
+        if (tennisPriorSets[idx]) {
+          tennisPriorSets[idx].isUnknown = !tennisPriorSets[idx].isUnknown;
+          renderTennisPriorSetsList();
+        }
+      };
+    });
+
+    tennisPriorSetsList.querySelectorAll('[data-action="toggle-winner"]').forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const idx = Number(btn.dataset.idx);
+        if (tennisPriorSets[idx]) {
+          tennisPriorSets[idx].winner = tennisPriorSets[idx].winner === 'us' ? 'them' : 'us';
+          renderTennisPriorSetsList();
+        }
+      };
+    });
+  }
+
   function updateSetUI() {
     txtStartingSet.textContent = startingSet;
     if (startingSet > 1) {
-      setsWonRow.style.display = 'block';
       txtSetHint.textContent = `Arrived late at Set ${startingSet}`;
+      if (currentSport === 'volleyball') {
+        volleyballSetsWonRow.style.display = 'block';
+        tennisPriorSetsRow.style.display = 'none';
+      } else {
+        volleyballSetsWonRow.style.display = 'none';
+        tennisPriorSetsRow.style.display = 'block';
+        syncTennisPriorSets();
+      }
     } else {
-      setsWonRow.style.display = 'none';
+      volleyballSetsWonRow.style.display = 'none';
+      tennisPriorSetsRow.style.display = 'none';
       txtSetHint.textContent = 'First set of match';
       setsUs = 0;
       setsThem = 0;
       txtSetsUs.textContent = '0';
       txtSetsThem.textContent = '0';
+      tennisPriorSets = [];
     }
   }
 
@@ -656,7 +928,6 @@ function showMatchSetupModal(navigate, user) {
     }
   };
 
-
   if (btnResumeInProgress && unfinishedMatch) {
     btnResumeInProgress.onclick = () => {
       store.resumeMatch(unfinishedMatch.id);
@@ -669,10 +940,41 @@ function showMatchSetupModal(navigate, user) {
 
   const startNew = () => {
     const opponent = inputOpponent.value.trim() || 'Opponent';
+
+    // Calculate final setsUs and setsThem
+    let finalSetsUs = setsUs;
+    let finalSetsThem = setsThem;
+    let finalSetScores = [];
+
+    if (currentSport === 'tennis' && startingSet > 1) {
+      finalSetsUs = 0;
+      finalSetsThem = 0;
+      finalSetScores = tennisPriorSets.map((s, idx) => {
+        const isUnknown = !!s.isUnknown;
+        const winner = isUnknown ? s.winner : (s.us > s.them ? 'us' : 'them');
+        if (winner === 'us') finalSetsUs++;
+        else finalSetsThem++;
+        return {
+          setNumber: idx + 1,
+          us: isUnknown ? '?' : s.us,
+          them: isUnknown ? '?' : s.them,
+          score: isUnknown ? '?' : `${s.us}-${s.them}`,
+          isUnknown,
+          winner
+        };
+      });
+    }
+
     store.startBroadcast(opponent, {
+      sport: currentSport,
       startingSet,
-      setsUs,
-      setsThem
+      setsUs: finalSetsUs,
+      setsThem: finalSetsThem,
+      tennisScoringType,
+      currentSetFormat,
+      server: initialServer,
+      setScores: finalSetScores,
+      ringBufferDuration: currentSport === 'tennis' ? 30 : 20
     });
     modal.remove();
     navigate('/stream');

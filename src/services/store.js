@@ -37,10 +37,67 @@ export function sortHighlightsChronologically(highlights = []) {
   });
 }
 
+// Format tennis points (0 -> "0", 1 -> "15", 2 -> "30", 3 -> "40", 4 -> "AD")
+export function getTennisPointDisplay(pointsUs, pointsThem, isTiebreak, scoringType = 'ad') {
+  if (isTiebreak) {
+    return {
+      us: String(pointsUs != null ? pointsUs : 0),
+      them: String(pointsThem != null ? pointsThem : 0),
+      isDeuce: false,
+      isTiebreak: true
+    };
+  }
+  const pUs = pointsUs || 0;
+  const pThem = pointsThem || 0;
+  const pointLabels = ['0', '15', '30', '40'];
+
+  if (pUs >= 3 && pThem >= 3) {
+    if (pUs === pThem) {
+      return { us: '40', them: '40', isDeuce: true, isTiebreak: false };
+    }
+    if (scoringType === 'ad') {
+      if (pUs === 4 && pThem === 3) {
+        return { us: 'AD', them: '40', isDeuce: false, isTiebreak: false };
+      }
+      if (pThem === 4 && pUs === 3) {
+        return { us: '40', them: 'AD', isDeuce: false, isTiebreak: false };
+      }
+    }
+  }
+
+  return {
+    us: pointLabels[pUs] || '40',
+    them: pointLabels[pThem] || '40',
+    isDeuce: false,
+    isTiebreak: false
+  };
+}
+
+// Format tennis set scores array into readable string (e.g. "6-4, 3-6, 7-6(4)")
+export function formatTennisSetScores(setScores = []) {
+  if (!setScores || setScores.length === 0) return '';
+  return setScores.map(s => {
+    if (s.isUnknown || s.score === '?' || (s.us === '?' && s.them === '?')) {
+      return '?';
+    }
+    if (s.isTiebreakOnly) {
+      return `[${s.us}-${s.them}]`;
+    }
+    if (s.tiebreakScore !== undefined) {
+      return `${s.us}-${s.them}(${s.tiebreakScore})`;
+    }
+    if (s.us !== undefined && s.them !== undefined) {
+      return `${s.us}-${s.them}`;
+    }
+    return s.score || '';
+  }).filter(Boolean).join(', ');
+}
+
 // Initial state with realistic demo matches so the app is immediately beautiful and testable
 const DEFAULT_STATE = {
   activeMatch: {
     id: 'demo-live',
+    sport: 'volleyball', // 'volleyball' or 'tennis'
     isLive: false,
     isFinished: false,
     date: 'Today',
@@ -54,7 +111,21 @@ const DEFAULT_STATE = {
     setsThem: 0,
     currentSet: 2,
     lastScoreTimestamp: Date.now(),
-    viewers: 1
+    viewers: 1,
+    // Tennis specific state
+    gamesUs: 0,
+    gamesThem: 0,
+    pointsUs: 0,
+    pointsThem: 0,
+    server: 'us', // 'us' or 'them'
+    tennisScoringType: 'ad', // 'ad' or 'no-ad'
+    currentSetFormat: 'standard', // 'standard', 'pro-set-8', 'tiebreak-10', 'tiebreak-7'
+    isTiebreak: false,
+    tiebreakTarget: 7,
+    tiebreakInitialServer: 'us',
+    setScores: [], // [{ set: 1, us: 6, them: 4 }, ...]
+    setFinished: false,
+    ringBufferDuration: 20
   },
   matches: [
     {
@@ -132,7 +203,7 @@ const DEFAULT_STATE = {
           type: 'player',
           set: 1,
           score: '19 - 17',
-          label: '⛏️ Amazing Dig',
+          label: '🪏 Amazing Dig',
           videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4',
           driveFileId: 'drive_h_w1',
           driveUrl: 'https://drive.google.com/file/d/drive_h_w1/view',
@@ -191,6 +262,76 @@ const DEFAULT_STATE = {
           timestamp: 1728662400000
         }
       ]
+    },
+    {
+      id: 'match-tennis-oct-19',
+      sport: 'tennis',
+      date: 'Oct 19, 2026',
+      opponent: 'St. Marks Academy',
+      teamUs: 'US',
+      teamThem: 'ST. MARKS',
+      isLive: false,
+      isFinished: true,
+      isArchived: false,
+      setsUs: 2,
+      setsThem: 1,
+      currentSet: 3,
+      currentSetFormat: 'tiebreak-10',
+      setScores: [
+        { set: 1, us: 6, them: 4, winner: 'us' },
+        { set: 2, us: 4, them: 6, winner: 'them' },
+        { set: 3, us: 10, them: 8, winner: 'us', isTiebreakOnly: true }
+      ],
+      highlights: [
+        {
+          id: 'h_t1',
+          type: 'player',
+          set: 1,
+          score: 'G:5-4 (40-30)',
+          label: '🔥 Sweet Serve',
+          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+          driveFileId: 'drive_h_t1',
+          driveUrl: 'https://drive.google.com/file/d/drive_h_t1/view',
+          fileSizeBytes: 3500000,
+          isUploading: false,
+          isStarred: true,
+          timestamp: 1729353600000
+        },
+        {
+          id: 'h_t2',
+          type: 'team',
+          set: 2,
+          score: 'G:3-4 (30-40)',
+          label: '💪 Killer Forehand',
+          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
+          driveFileId: 'drive_h_t2',
+          driveUrl: 'https://drive.google.com/file/d/drive_h_t2/view',
+          fileSizeBytes: 3400000,
+          isUploading: false,
+          isStarred: false,
+          timestamp: 1729355400000
+        },
+        {
+          id: 'h_t3',
+          type: 'player',
+          set: 3,
+          score: 'TB:9-8',
+          label: '↩️ Blistering Return',
+          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
+          driveFileId: 'drive_h_t3',
+          driveUrl: 'https://drive.google.com/file/d/drive_h_t3/view',
+          fileSizeBytes: 3600000,
+          isUploading: false,
+          isStarred: true,
+          timestamp: 1729357200000
+        }
+      ],
+      comments: [
+        { sender: 'Grandma', text: 'Watching the tennis match! Great forehands! 🎾' },
+        { sender: 'Game Streamer', text: '🎾 Set 1 Final: US 6 - 4 ST. MARKS (US wins Set 1)', isCheer: true },
+        { sender: 'Game Streamer', text: '🎾 Set 2 Final: US 4 - 6 ST. MARKS (ST. MARKS wins Set 2)', isCheer: true },
+        { sender: 'Game Streamer', text: '🏆 Tennis Match Final: US wins! (6-4, 4-6, [10-8])', isCheer: true }
+      ]
     }
   ],
   chat: [
@@ -215,6 +356,19 @@ class GameStore {
         if (saved) {
           const parsed = JSON.parse(saved);
           const merged = { ...DEFAULT_STATE, ...parsed };
+          // Ensure activeMatch has all tennis fields initialized
+          if (merged.activeMatch) {
+            merged.activeMatch.sport = merged.activeMatch.sport || 'volleyball';
+            if (merged.activeMatch.gamesUs === undefined) merged.activeMatch.gamesUs = 0;
+            if (merged.activeMatch.gamesThem === undefined) merged.activeMatch.gamesThem = 0;
+            if (merged.activeMatch.pointsUs === undefined) merged.activeMatch.pointsUs = 0;
+            if (merged.activeMatch.pointsThem === undefined) merged.activeMatch.pointsThem = 0;
+            if (!merged.activeMatch.server) merged.activeMatch.server = 'us';
+            if (!merged.activeMatch.tennisScoringType) merged.activeMatch.tennisScoringType = 'ad';
+            if (!merged.activeMatch.currentSetFormat) merged.activeMatch.currentSetFormat = 'standard';
+            if (!merged.activeMatch.setScores) merged.activeMatch.setScores = [];
+          }
+
           // If not actively streaming live, reset score ONLY if match was already finished
           if (merged.activeMatch && merged.activeMatch.isFinished) {
             merged.activeMatch.scoreUs = 0;
@@ -222,9 +376,22 @@ class GameStore {
             merged.activeMatch.setsUs = 0;
             merged.activeMatch.setsThem = 0;
             merged.activeMatch.currentSet = 1;
+            merged.activeMatch.gamesUs = 0;
+            merged.activeMatch.gamesThem = 0;
+            merged.activeMatch.pointsUs = 0;
+            merged.activeMatch.pointsThem = 0;
+            merged.activeMatch.setScores = [];
           }
+
+          // Ensure demo tennis match is available in archive
+          if (!merged.matches.some(m => m.id === 'match-tennis-oct-19')) {
+            const demoTennis = DEFAULT_STATE.matches.find(m => m.id === 'match-tennis-oct-19');
+            if (demoTennis) merged.matches.push(demoTennis);
+          }
+
           // Ensure all matches and clips have archive, finished, drive & type properties, and sort highlights chronologically
           for (const match of (merged.matches || [])) {
+            match.sport = match.sport || 'volleyball';
             match.highlights = sortHighlightsChronologically(match.highlights || []);
             if (typeof match.isArchived === 'undefined') {
               match.isArchived = false;
@@ -281,6 +448,7 @@ class GameStore {
     if (!matchEntry) {
       matchEntry = {
         id: m.id,
+        sport: m.sport || 'volleyball',
         date: m.date || 'Today',
         opponent: m.opponent,
         teamUs: m.teamUs || 'US',
@@ -288,15 +456,30 @@ class GameStore {
         isLive: m.isLive,
         isFinished: isFinished,
         isArchived: false,
-        setsUs: m.setsUs,
-        setsThem: m.setsThem,
-        currentSet: m.currentSet,
-        scoreUs: m.scoreUs,
-        scoreThem: m.scoreThem,
+        setsUs: m.setsUs || 0,
+        setsThem: m.setsThem || 0,
+        currentSet: m.currentSet || 1,
+        scoreUs: m.scoreUs || 0,
+        scoreThem: m.scoreThem || 0,
+        gamesUs: m.gamesUs || 0,
+        gamesThem: m.gamesThem || 0,
+        pointsUs: m.pointsUs || 0,
+        pointsThem: m.pointsThem || 0,
+        server: m.server || 'us',
+        tennisScoringType: m.tennisScoringType || 'ad',
+        currentSetFormat: m.currentSetFormat || 'standard',
+        isTiebreak: !!m.isTiebreak,
+        tiebreakTarget: m.tiebreakTarget || 7,
+        tiebreakInitialServer: m.tiebreakInitialServer || m.server || 'us',
+        setScores: m.setScores ? [...m.setScores] : [],
+        setFinished: !!m.setFinished,
+        ringBufferDuration: m.ringBufferDuration || (m.sport === 'tennis' ? 30 : 20),
+        winner: m.winner || null,
         highlights: []
       };
       this.state.matches.unshift(matchEntry);
     } else {
+      matchEntry.sport = m.sport || matchEntry.sport || 'volleyball';
       matchEntry.isLive = m.isLive;
       matchEntry.isFinished = isFinished;
       matchEntry.setsUs = m.setsUs;
@@ -304,9 +487,36 @@ class GameStore {
       matchEntry.currentSet = m.currentSet;
       matchEntry.scoreUs = m.scoreUs;
       matchEntry.scoreThem = m.scoreThem;
+      matchEntry.gamesUs = m.gamesUs || 0;
+      matchEntry.gamesThem = m.gamesThem || 0;
+      matchEntry.pointsUs = m.pointsUs || 0;
+      matchEntry.pointsThem = m.pointsThem || 0;
+      matchEntry.server = m.server || 'us';
+      matchEntry.tennisScoringType = m.tennisScoringType || 'ad';
+      matchEntry.currentSetFormat = m.currentSetFormat || 'standard';
+      matchEntry.isTiebreak = !!m.isTiebreak;
+      matchEntry.tiebreakTarget = m.tiebreakTarget || 7;
+      matchEntry.tiebreakInitialServer = m.tiebreakInitialServer || matchEntry.tiebreakInitialServer || 'us';
+      matchEntry.setScores = m.setScores ? [...m.setScores] : (matchEntry.setScores || []);
+      matchEntry.setFinished = !!m.setFinished;
       matchEntry.opponent = m.opponent;
+      matchEntry.ringBufferDuration = m.ringBufferDuration || (m.sport === 'tennis' ? 30 : 20);
+      matchEntry.winner = m.winner || matchEntry.winner || null;
     }
     return matchEntry;
+  }
+
+  // Helper: Return concise score summary string for highlights and point buffers
+  getScoreSummaryString() {
+    const m = this.state.activeMatch;
+    if (m.sport === 'tennis') {
+      const ptDisplay = getTennisPointDisplay(m.pointsUs, m.pointsThem, m.isTiebreak, m.tennisScoringType);
+      if (m.isTiebreak) {
+        return `G:${m.gamesUs}-${m.gamesThem} TB:${ptDisplay.us}-${ptDisplay.them}`;
+      }
+      return `G:${m.gamesUs}-${m.gamesThem} (${ptDisplay.us}-${ptDisplay.them})`;
+    }
+    return `${m.scoreUs} - ${m.scoreThem}`;
   }
 
   // --- Point Ring-Buffer & 5-Second Grace Period Management ---
@@ -317,12 +527,13 @@ class GameStore {
     if (this.pointBuffer && this.pointBuffer.graceTimer) {
       clearTimeout(this.pointBuffer.graceTimer);
     }
+    const scoreSummary = this.getScoreSummaryString();
     this.pointBuffer = {
       current: {
         id: 'pt_' + now + '_' + Math.random().toString(36).substr(2, 6),
         set: m.currentSet || 1,
-        scoreAtStart: `${m.scoreUs || 0} - ${m.scoreThem || 0}`,
-        scoreCurrent: `${m.scoreUs || 0} - ${m.scoreThem || 0}`,
+        scoreAtStart: scoreSummary,
+        scoreCurrent: scoreSummary,
         startTime: now,
         lastScoreActionTimestamp: null,
         pendingHighlight: null
@@ -341,7 +552,7 @@ class GameStore {
 
     // Record the timestamp of this latest score update
     cur.lastScoreActionTimestamp = actionTimestamp;
-    cur.scoreCurrent = `${m.scoreUs} - ${m.scoreThem}`;
+    cur.scoreCurrent = this.getScoreSummaryString();
 
     // Reset 5s grace period timer if running (handles rapid undos/corrections/catch-ups)
     if (this.pointBuffer.graceTimer) {
@@ -366,11 +577,12 @@ class GameStore {
     const cur = this.pointBuffer.current;
     const m = this.state.activeMatch;
     const endTime = cur.lastScoreActionTimestamp || Date.now();
+    const finalScore = this.getScoreSummaryString();
 
     const completedPoint = {
       ...cur,
       endTime: endTime,
-      finalScore: `${m.scoreUs} - ${m.scoreThem}`,
+      finalScore: finalScore,
       finalSet: m.currentSet
     };
 
@@ -394,8 +606,8 @@ class GameStore {
     this.pointBuffer.current = {
       id: 'pt_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
       set: m.currentSet,
-      scoreAtStart: `${m.scoreUs} - ${m.scoreThem}`,
-      scoreCurrent: `${m.scoreUs} - ${m.scoreThem}`,
+      scoreAtStart: finalScore,
+      scoreCurrent: finalScore,
       startTime: endTime,
       lastScoreActionTimestamp: null,
       pendingHighlight: null
@@ -406,6 +618,11 @@ class GameStore {
 
   // Tap or swipe on the left/right screen
   adjustScore(side, delta) {
+    if (this.state.activeMatch.sport === 'tennis') {
+      this.adjustScoreTennis(side, delta);
+      return;
+    }
+
     const isUs = (this.state.activeMatch.courtSideUs === side);
     if (isUs) {
       const next = Math.max(0, Number(this.state.activeMatch.scoreUs || 0) + delta);
@@ -424,10 +641,399 @@ class GameStore {
     this.onScoreAction(now);
   }
 
+  // Tennis Scoring Engine (Points -> Games -> Sets with Tiebreaks and Server Rotation)
+  adjustScoreTennis(side, delta) {
+    const m = this.state.activeMatch;
+    const isUs = (m.courtSideUs === side);
+    const now = Date.now();
+
+    // 1. Point Undo / Decrement
+    if (delta < 0) {
+      if (m.isTiebreak) {
+        if (isUs && m.pointsUs > 0) m.pointsUs -= 1;
+        if (!isUs && m.pointsThem > 0) m.pointsThem -= 1;
+        // Recalculate tiebreak server
+        const total = m.pointsUs + m.pointsThem;
+        const initial = m.tiebreakInitialServer || 'us';
+        const other = initial === 'us' ? 'them' : 'us';
+        const mod = total % 4;
+        m.server = (mod === 1 || mod === 2) ? other : initial;
+      } else {
+        if (isUs) {
+          if (m.pointsUs === 4 && m.pointsThem === 3) {
+            m.pointsUs = 3; // US drops from AD to Deuce
+          } else {
+            m.pointsUs = Math.max(0, m.pointsUs - 1);
+          }
+        } else {
+          if (m.pointsThem === 4 && m.pointsUs === 3) {
+            m.pointsThem = 3; // Opponent drops from AD to Deuce
+          } else {
+            m.pointsThem = Math.max(0, m.pointsThem - 1);
+          }
+        }
+      }
+      m.setFinished = false;
+      m.lastScoreTimestamp = now;
+      this.syncActiveMatchToArchive(false);
+      this.triggerHaptic('double');
+      this.saveState();
+      this.onScoreAction(now);
+      return;
+    }
+
+    // 2. Point Increment (+1)
+    if (m.isTiebreak) {
+      if (isUs) m.pointsUs += 1;
+      else m.pointsThem += 1;
+
+      const target = m.tiebreakTarget || 7;
+      const winnerPts = isUs ? m.pointsUs : m.pointsThem;
+      const loserPts = isUs ? m.pointsThem : m.pointsUs;
+      const diff = winnerPts - loserPts;
+
+      if (winnerPts >= target && diff >= 2) {
+        // Tiebreak won!
+        if (m.currentSetFormat === 'tiebreak-10' || m.currentSetFormat === 'match_tiebreak_10' || m.currentSetFormat === 'tiebreak-7' || m.currentSetFormat === 'tiebreak_7') {
+          // Tiebreak-only set (e.g. match tiebreak)
+          m.setScores = m.setScores || [];
+          m.setScores.push({
+            set: m.currentSet,
+            setNumber: m.currentSet,
+            us: m.pointsUs,
+            them: m.pointsThem,
+            score: `[${m.pointsUs}-${m.pointsThem}]`,
+            winner: isUs ? 'us' : 'them',
+            isTiebreakOnly: true
+          });
+          if (isUs) m.setsUs += 1;
+          else m.setsThem += 1;
+          m.setFinished = true;
+        } else {
+          // Set tiebreak at 6-6 (or 8-8)
+          if (isUs) m.gamesUs += 1;
+          else m.gamesThem += 1;
+
+          m.setScores = m.setScores || [];
+          m.setScores.push({
+            set: m.currentSet,
+            setNumber: m.currentSet,
+            us: m.gamesUs,
+            them: m.gamesThem,
+            score: `${m.gamesUs}-${m.gamesThem}`,
+            winner: isUs ? 'us' : 'them',
+            tiebreakScore: `${loserPts}`
+          });
+          if (isUs) m.setsUs += 1;
+          else m.setsThem += 1;
+          m.setFinished = true;
+        }
+
+        const setWinnerName = isUs ? 'US' : (m.opponent || 'OPPONENT').toUpperCase();
+        this.state.chat.push({
+          id: 'set_summary_' + Date.now(),
+          sender: 'Game Streamer',
+          text: `🎾 Set ${m.currentSet} Final: US ${m.gamesUs || m.pointsUs} - ${m.gamesThem || m.pointsThem} (${setWinnerName} wins Set ${m.currentSet})`,
+          set: m.currentSet,
+          score: `${m.gamesUs || m.pointsUs} - ${m.gamesThem || m.pointsThem}`,
+          timestamp: Date.now(),
+          isCheer: true
+        });
+
+        // Rotate server for the next set (receiver of tiebreak serves game 1 of next set)
+        const initial = m.tiebreakInitialServer || 'us';
+        m.server = (initial === 'us' ? 'them' : 'us');
+      } else {
+        // Tiebreak ongoing - update server rotation
+        const total = m.pointsUs + m.pointsThem;
+        const initial = m.tiebreakInitialServer || 'us';
+        const other = initial === 'us' ? 'them' : 'us';
+        const mod = total % 4;
+        m.server = (mod === 1 || mod === 2) ? other : initial;
+      }
+    } else {
+      // Normal game play
+      let gameWon = false;
+      const scoring = m.tennisScoringType || 'ad';
+
+      if (scoring === 'no-ad') {
+        if (isUs) {
+          if (m.pointsUs === 3 && m.pointsThem === 3) {
+            gameWon = true; // Deciding point at 40-40 Deuce!
+          } else if (m.pointsUs === 3) {
+            gameWon = true;
+          } else {
+            m.pointsUs += 1;
+          }
+        } else {
+          if (m.pointsThem === 3 && m.pointsUs === 3) {
+            gameWon = true; // Deciding point at 40-40 Deuce!
+          } else if (m.pointsThem === 3) {
+            gameWon = true;
+          } else {
+            m.pointsThem += 1;
+          }
+        }
+      } else {
+        // Standard Advantage (Ad) scoring
+        if (isUs) {
+          if (m.pointsUs < 3) {
+            m.pointsUs += 1;
+          } else if (m.pointsUs === 3 && m.pointsThem < 3) {
+            gameWon = true;
+          } else if (m.pointsUs === 3 && m.pointsThem === 3) {
+            m.pointsUs = 4; // Deuce -> US Ad-In
+          } else if (m.pointsUs === 4 && m.pointsThem === 3) {
+            gameWon = true; // US had Ad and scores -> Game!
+          } else if (m.pointsUs === 3 && m.pointsThem === 4) {
+            m.pointsThem = 3; // THEM had Ad, US scores -> Back to Deuce (3-3)
+          }
+        } else {
+          if (m.pointsThem < 3) {
+            m.pointsThem += 1;
+          } else if (m.pointsThem === 3 && m.pointsUs < 3) {
+            gameWon = true;
+          } else if (m.pointsThem === 3 && m.pointsUs === 3) {
+            m.pointsThem = 4; // Deuce -> THEM Ad-Out
+          } else if (m.pointsThem === 4 && m.pointsUs === 3) {
+            gameWon = true; // THEM had Ad and scores -> Game!
+          } else if (m.pointsThem === 3 && m.pointsUs === 4) {
+            m.pointsUs = 3; // US had Ad, THEM scores -> Back to Deuce (3-3)
+          }
+        }
+      }
+
+      if (gameWon) {
+        m.pointsUs = 0;
+        m.pointsThem = 0;
+        if (isUs) m.gamesUs += 1;
+        else m.gamesThem += 1;
+
+        // Rotate server after each completed game
+        m.server = (m.server === 'us' ? 'them' : 'us');
+
+        // Check Set win / tiebreak conditions
+        const fmt = m.currentSetFormat || 'standard';
+        if (fmt === 'standard') {
+          if (m.gamesUs === 6 && m.gamesThem === 6) {
+            // Set tiebreak reached at 6-6!
+            m.isTiebreak = true;
+            m.tiebreakTarget = 7;
+            m.tiebreakInitialServer = m.server;
+          } else if ((m.gamesUs >= 6 || m.gamesThem >= 6) && Math.abs(m.gamesUs - m.gamesThem) >= 2) {
+            // Set Won!
+            const setWinner = m.gamesUs > m.gamesThem ? 'us' : 'them';
+            m.setScores = m.setScores || [];
+            m.setScores.push({
+              set: m.currentSet,
+              setNumber: m.currentSet,
+              us: m.gamesUs,
+              them: m.gamesThem,
+              score: `${m.gamesUs}-${m.gamesThem}`,
+              winner: setWinner
+            });
+            if (setWinner === 'us') m.setsUs += 1;
+            else m.setsThem += 1;
+            m.setFinished = true;
+
+            const winnerName = setWinner === 'us' ? 'US' : (m.opponent || 'OPPONENT').toUpperCase();
+            this.state.chat.push({
+              id: 'set_summary_' + Date.now(),
+              sender: 'Game Streamer',
+              text: `🎾 Set ${m.currentSet} Final: US ${m.gamesUs} - ${m.gamesThem} (${winnerName} wins Set ${m.currentSet})`,
+              set: m.currentSet,
+              score: `${m.gamesUs} - ${m.gamesThem}`,
+              timestamp: Date.now(),
+              isCheer: true
+            });
+          }
+        } else if (fmt === 'pro-set-8' || fmt === 'pro8') {
+          if (m.gamesUs === 8 && m.gamesThem === 8) {
+            // Tiebreak reached at 8-8!
+            m.isTiebreak = true;
+            m.tiebreakTarget = 7;
+            m.tiebreakInitialServer = m.server;
+          } else if ((m.gamesUs >= 8 || m.gamesThem >= 8) && Math.abs(m.gamesUs - m.gamesThem) >= 2) {
+            const setWinner = m.gamesUs > m.gamesThem ? 'us' : 'them';
+            m.setScores = m.setScores || [];
+            m.setScores.push({
+              set: m.currentSet,
+              setNumber: m.currentSet,
+              us: m.gamesUs,
+              them: m.gamesThem,
+              score: `${m.gamesUs}-${m.gamesThem}`,
+              winner: setWinner
+            });
+            if (setWinner === 'us') m.setsUs += 1;
+            else m.setsThem += 1;
+            m.setFinished = true;
+
+            const winnerName = setWinner === 'us' ? 'US' : (m.opponent || 'OPPONENT').toUpperCase();
+            this.state.chat.push({
+              id: 'set_summary_' + Date.now(),
+              sender: 'Game Streamer',
+              text: `🎾 Pro Set Final: US ${m.gamesUs} - ${m.gamesThem} (${winnerName} wins Set)`,
+              set: m.currentSet,
+              score: `${m.gamesUs} - ${m.gamesThem}`,
+              timestamp: Date.now(),
+              isCheer: true
+            });
+          }
+        }
+      }
+    }
+
+    m.lastScoreTimestamp = now;
+    this.syncActiveMatchToArchive(false);
+    this.triggerHaptic(delta > 0 ? 'light' : 'double');
+    this.saveState();
+
+    // Trigger 5-second grace period on point buffer
+    this.onScoreAction(now);
+  }
+
+  // Start next tennis set on demand with chosen format
+  startNextTennisSet(format = 'standard') {
+    if (this.pointBuffer && this.pointBuffer.graceTimer) {
+      this.finalizePointBoundary();
+    }
+    const m = this.state.activeMatch;
+
+    const isTB10 = (format === 'tiebreak-10' || format === 'match_tiebreak_10');
+    const isTB7 = (format === 'tiebreak-7' || format === 'tiebreak_7');
+
+    // If set was not yet recorded in setScores, record it now
+    if (!m.setFinished && (m.gamesUs > 0 || m.gamesThem > 0 || m.pointsUs > 0 || m.pointsThem > 0)) {
+      const setWinner = m.gamesUs > m.gamesThem ? 'us' : (m.gamesThem > m.gamesUs ? 'them' : null);
+      const wasTBOnly = (m.currentSetFormat === 'tiebreak-10' || m.currentSetFormat === 'match_tiebreak_10' || m.currentSetFormat === 'tiebreak-7' || m.currentSetFormat === 'tiebreak_7');
+      m.setScores = m.setScores || [];
+      const finalUs = m.isTiebreak ? m.pointsUs : m.gamesUs;
+      const finalThem = m.isTiebreak ? m.pointsThem : m.gamesThem;
+      m.setScores.push({
+        set: m.currentSet,
+        setNumber: m.currentSet,
+        us: finalUs,
+        them: finalThem,
+        score: wasTBOnly ? `[${finalUs}-${finalThem}]` : `${finalUs}-${finalThem}`,
+        winner: setWinner,
+        isTiebreakOnly: wasTBOnly
+      });
+      if (setWinner === 'us') m.setsUs += 1;
+      else if (setWinner === 'them') m.setsThem += 1;
+    }
+
+    const nextSetNum = (m.currentSet || 1) + 1;
+    m.currentSet = nextSetNum;
+    m.currentSetFormat = format;
+    m.gamesUs = 0;
+    m.gamesThem = 0;
+    m.pointsUs = 0;
+    m.pointsThem = 0;
+    m.isTiebreak = isTB10 || isTB7;
+    m.tiebreakTarget = isTB10 ? 10 : 7;
+    m.setFinished = false;
+
+    // Normal tennis server rotation to start next set
+    m.server = (m.server === 'us' ? 'them' : 'us');
+    m.tiebreakInitialServer = m.server;
+
+    const formatLabels = {
+      'standard': 'Standard 6-Game Set',
+      'pro-set-8': '8-Game Pro Set',
+      'tiebreak-10': '10-Point Match Tiebreak',
+      'tiebreak-7': '7-Point Tiebreak'
+    };
+    const fName = formatLabels[format] || format;
+
+    this.state.chat.push({
+      id: 'set_start_' + Date.now(),
+      sender: 'Game Streamer',
+      text: `🎾 Starting Set ${nextSetNum} (${fName})`,
+      set: nextSetNum,
+      timestamp: Date.now(),
+      isCheer: true
+    });
+
+    m.lastScoreTimestamp = Date.now();
+    this.syncActiveMatchToArchive(false);
+    this.initPointBuffers();
+    this.triggerHaptic('heavy');
+    this.saveState();
+  }
+
+  // Universal Tennis Score & Server Editor Updater
+  updateTennisScore({ setScores, gamesUs, gamesThem, pointsUs, pointsThem, server, currentSetFormat, isTiebreak, tennisScoringType }) {
+    const m = this.state.activeMatch;
+    if (!m) return;
+    if (setScores !== undefined) {
+      m.setScores = Array.isArray(setScores) ? [...setScores] : m.setScores;
+      // Recalculate setsUs and setsThem from completed sets where winner is identifiable
+      let sUs = 0;
+      let sThem = 0;
+      for (const s of m.setScores) {
+        if (s.winner === 'us' || (typeof s.us === 'number' && typeof s.them === 'number' && s.us > s.them)) {
+          sUs++;
+        } else if (s.winner === 'them' || (typeof s.us === 'number' && typeof s.them === 'number' && s.them > s.us)) {
+          sThem++;
+        }
+      }
+      m.setsUs = sUs;
+      m.setsThem = sThem;
+    }
+    if (gamesUs !== undefined) m.gamesUs = Math.max(0, parseInt(gamesUs, 10) || 0);
+    if (gamesThem !== undefined) m.gamesThem = Math.max(0, parseInt(gamesThem, 10) || 0);
+    if (pointsUs !== undefined) m.pointsUs = Math.max(0, parseInt(pointsUs, 10) || 0);
+    if (pointsThem !== undefined) m.pointsThem = Math.max(0, parseInt(pointsThem, 10) || 0);
+
+    // Sanitize illegal Advantage (AD) combinations if not in tiebreak
+    // Advantage is only valid if the other player is at 40 (value 3).
+    if (!m.isTiebreak) {
+      if (m.pointsUs === 4 && m.pointsThem < 3) {
+        m.pointsUs = 3; // Clamp to 40
+      }
+      if (m.pointsThem === 4 && m.pointsUs < 3) {
+        m.pointsThem = 3; // Clamp to 40
+      }
+      if (m.pointsUs === 4 && m.pointsThem === 4) {
+        m.pointsUs = 3;
+        m.pointsThem = 3;
+      }
+    }
+
+    if (server !== undefined) m.server = (server === 'them' ? 'them' : 'us');
+    if (currentSetFormat !== undefined) m.currentSetFormat = currentSetFormat;
+    if (isTiebreak !== undefined) m.isTiebreak = !!isTiebreak;
+    if (tennisScoringType !== undefined) m.tennisScoringType = tennisScoringType;
+
+    m.lastScoreTimestamp = Date.now();
+    this.syncActiveMatchToArchive(false);
+    this.saveState();
+  }
+
+  // Toggle active server between 'us' and 'them'
+  toggleServer() {
+    const m = this.state.activeMatch;
+    if (!m) return;
+    m.server = (m.server === 'us' ? 'them' : 'us');
+    this.syncActiveMatchToArchive(false);
+    this.triggerHaptic('light');
+    this.saveState();
+  }
+
   resetScores() {
-    this.state.activeMatch.scoreUs = 0;
-    this.state.activeMatch.scoreThem = 0;
-    this.state.activeMatch.lastScoreTimestamp = Date.now();
+    const m = this.state.activeMatch;
+    if (m.sport === 'tennis') {
+      m.pointsUs = 0;
+      m.pointsThem = 0;
+      m.gamesUs = 0;
+      m.gamesThem = 0;
+      m.isTiebreak = (m.currentSetFormat === 'tiebreak-10' || m.currentSetFormat === 'tiebreak-7');
+      m.setFinished = false;
+    } else {
+      m.scoreUs = 0;
+      m.scoreThem = 0;
+    }
+    m.lastScoreTimestamp = Date.now();
     this.syncActiveMatchToArchive(false);
     this.initPointBuffers();
     this.triggerHaptic('medium');
@@ -442,6 +1048,11 @@ class GameStore {
   }
 
   advanceSet() {
+    if (this.state.activeMatch.sport === 'tennis') {
+      this.startNextTennisSet('standard');
+      return;
+    }
+
     if (this.pointBuffer && this.pointBuffer.graceTimer) {
       this.finalizePointBoundary();
     }
@@ -480,9 +1091,12 @@ class GameStore {
     this.saveState();
   }
 
-  // Always check 25 points, win by 2
+  // Always check victory conditions
   checkSetVictory() {
     const m = this.state.activeMatch;
+    if (m.sport === 'tennis') {
+      return !!m.setFinished;
+    }
     const lead = Math.abs(m.scoreUs - m.scoreThem);
     const maxScore = Math.max(m.scoreUs, m.scoreThem);
     return maxScore >= 25 && lead >= 2;
@@ -500,44 +1114,88 @@ class GameStore {
   }
 
   // Finish match, log final set score, save complete comment transcript to archive
-  finishMatch() {
+  finishMatch(winnerOverride = null) {
     if (this.pointBuffer && this.pointBuffer.graceTimer) {
       this.finalizePointBoundary();
     }
 
     const m = this.state.activeMatch;
-    const prevSet = m.currentSet;
-    const finalUs = m.scoreUs;
-    const finalThem = m.scoreThem;
+    const isTennis = (m.sport === 'tennis');
 
-    // If points were scored in this set, award the set and log it
-    if (finalUs > 0 || finalThem > 0) {
-      if (finalUs > finalThem) {
-        m.setsUs += 1;
-      } else if (finalThem > finalUs) {
-        m.setsThem += 1;
+    if (isTennis) {
+      // If current set had games/points and wasn't finalized
+      if (!m.setFinished && (m.gamesUs > 0 || m.gamesThem > 0 || m.pointsUs > 0 || m.pointsThem > 0)) {
+        let setWin = winnerOverride;
+        if (!setWin) {
+          if (m.gamesUs > m.gamesThem) setWin = 'us';
+          else if (m.gamesThem > m.gamesUs) setWin = 'them';
+          else if (m.pointsUs > m.pointsThem) setWin = 'us';
+          else if (m.pointsThem > m.pointsUs) setWin = 'them';
+        }
+        m.setScores = m.setScores || [];
+        m.setScores.push({
+          set: m.currentSet,
+          us: (m.currentSetFormat === 'tiebreak-10' || m.currentSetFormat === 'tiebreak-7') ? m.pointsUs : m.gamesUs,
+          them: (m.currentSetFormat === 'tiebreak-10' || m.currentSetFormat === 'tiebreak-7') ? m.pointsThem : m.gamesThem,
+          winner: setWin,
+          isTiebreakOnly: (m.currentSetFormat === 'tiebreak-10' || m.currentSetFormat === 'tiebreak-7')
+        });
+        if (setWin === 'us') m.setsUs += 1;
+        else if (setWin === 'them') m.setsThem += 1;
       }
 
+      let matchWinner = winnerOverride;
+      if (!matchWinner) {
+        if (m.setsUs > m.setsThem) matchWinner = 'us';
+        else if (m.setsThem > m.setsUs) matchWinner = 'them';
+        else matchWinner = 'us';
+      }
+      m.winner = matchWinner;
+      const winnerName = matchWinner === 'us' ? 'US' : (m.opponent || 'OPPONENT').toUpperCase();
+      const scoreStr = formatTennisSetScores(m.setScores);
+
       this.state.chat.push({
-        id: 'set_summary_' + Date.now(),
+        id: 'match_final_' + Date.now(),
         sender: 'Game Streamer',
-        text: `🏐 Set ${prevSet} Final: US ${finalUs} - ${finalThem} ${m.teamThem}`,
-        set: prevSet,
-        score: `${finalUs} - ${finalThem}`,
+        text: `🏆 Tennis Match Final: ${winnerName} wins! ${scoreStr ? `(${scoreStr})` : ''}`,
+        timestamp: Date.now(),
+        isCheer: true
+      });
+    } else {
+      const prevSet = m.currentSet;
+      const finalUs = m.scoreUs;
+      const finalThem = m.scoreThem;
+
+      // If points were scored in this set, award the set and log it
+      if (finalUs > 0 || finalThem > 0) {
+        if (finalUs > finalThem) {
+          m.setsUs += 1;
+        } else if (finalThem > finalUs) {
+          m.setsThem += 1;
+        }
+
+        this.state.chat.push({
+          id: 'set_summary_' + Date.now(),
+          sender: 'Game Streamer',
+          text: `🏐 Set ${prevSet} Final: US ${finalUs} - ${finalThem} ${m.teamThem}`,
+          set: prevSet,
+          score: `${finalUs} - ${finalThem}`,
+          timestamp: Date.now(),
+          isCheer: true
+        });
+      }
+
+      // Post final match milestone to chat
+      const matchWinner = winnerOverride ? (winnerOverride === 'us' ? 'US' : m.teamThem) : (m.setsUs > m.setsThem ? 'US' : m.teamThem);
+      m.winner = winnerOverride || (m.setsUs > m.setsThem ? 'us' : 'them');
+      this.state.chat.push({
+        id: 'match_final_' + Date.now(),
+        sender: 'Game Streamer',
+        text: `🏆 Match Final: US won ${m.setsUs} set${m.setsUs === 1 ? '' : 's'}, ${m.teamThem} won ${m.setsThem} set${m.setsThem === 1 ? '' : 's'} (${matchWinner} wins match)`,
         timestamp: Date.now(),
         isCheer: true
       });
     }
-
-    // Post final match milestone to chat
-    const matchWinner = m.setsUs > m.setsThem ? 'US' : m.teamThem;
-    this.state.chat.push({
-      id: 'match_final_' + Date.now(),
-      sender: 'Game Streamer',
-      text: `🏆 Match Final: US won ${m.setsUs} set${m.setsUs === 1 ? '' : 's'}, ${m.teamThem} won ${m.setsThem} set${m.setsThem === 1 ? '' : 's'} (${matchWinner} wins match)`,
-      timestamp: Date.now(),
-      isCheer: true
-    });
 
     m.isLive = false;
     m.isFinished = true;
@@ -738,8 +1396,10 @@ class GameStore {
     const match = this.state.matches.find(m => m.id === matchId);
     if (!match) return;
 
+    const sport = match.sport || 'volleyball';
     this.state.activeMatch = {
       id: match.id,
+      sport: sport,
       isLive: true,
       isFinished: false,
       date: match.date || 'Today',
@@ -752,6 +1412,19 @@ class GameStore {
       setsUs: match.setsUs || 0,
       setsThem: match.setsThem || 0,
       currentSet: match.currentSet || 1,
+      gamesUs: match.gamesUs || 0,
+      gamesThem: match.gamesThem || 0,
+      pointsUs: match.pointsUs || 0,
+      pointsThem: match.pointsThem || 0,
+      server: match.server || 'us',
+      tennisScoringType: match.tennisScoringType || 'ad',
+      currentSetFormat: match.currentSetFormat || 'standard',
+      isTiebreak: !!match.isTiebreak,
+      tiebreakTarget: match.tiebreakTarget || 7,
+      tiebreakInitialServer: match.tiebreakInitialServer || match.server || 'us',
+      setScores: match.setScores ? [...match.setScores] : [],
+      setFinished: !!match.setFinished,
+      ringBufferDuration: match.ringBufferDuration || (sport === 'tennis' ? 30 : 20),
       lastScoreTimestamp: Date.now(),
       viewers: 1
     };
@@ -769,12 +1442,37 @@ class GameStore {
 
     const oppUpper = (opponentName || 'OPPONENT').toUpperCase();
     const newMatchId = 'match_' + Date.now();
+    const sport = options.sport || 'volleyball';
     const startingSet = Math.max(1, parseInt(options.startingSet, 10) || 1);
     const setsUs = Math.max(0, parseInt(options.setsUs, 10) || 0);
     const setsThem = Math.max(0, parseInt(options.setsThem, 10) || 0);
+    const ringBufferDuration = options.ringBufferDuration || (sport === 'tennis' ? 30 : 20);
+
+    // Persist broadcaster's preferred sport in localStorage
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('gamestreamer_last_sport', sport);
+      }
+    } catch (e) {}
+
+    const tennisState = {
+      gamesUs: Math.max(0, parseInt(options.gamesUs, 10) || 0),
+      gamesThem: Math.max(0, parseInt(options.gamesThem, 10) || 0),
+      pointsUs: Math.max(0, parseInt(options.pointsUs, 10) || 0),
+      pointsThem: Math.max(0, parseInt(options.pointsThem, 10) || 0),
+      server: options.server || 'us',
+      tennisScoringType: options.tennisScoringType || 'ad',
+      currentSetFormat: options.currentSetFormat || 'standard',
+      isTiebreak: options.currentSetFormat === 'tiebreak-10' || options.currentSetFormat === 'tiebreak-7' || !!options.isTiebreak,
+      tiebreakTarget: options.currentSetFormat === 'tiebreak-10' ? 10 : 7,
+      tiebreakInitialServer: options.server || 'us',
+      setScores: options.setScores ? [...options.setScores] : [],
+      setFinished: false
+    };
 
     this.state.activeMatch = {
       id: newMatchId,
+      sport: sport,
       opponent: opponentName,
       teamUs: 'US',
       teamThem: oppUpper,
@@ -788,11 +1486,26 @@ class GameStore {
       setsThem: setsThem,
       currentSet: startingSet,
       lastScoreTimestamp: Date.now(),
-      viewers: 1
+      viewers: 1,
+      ringBufferDuration: ringBufferDuration,
+      ...(sport === 'tennis' ? tennisState : {
+        gamesUs: 0,
+        gamesThem: 0,
+        pointsUs: 0,
+        pointsThem: 0,
+        server: 'us',
+        tennisScoringType: 'ad',
+        currentSetFormat: 'standard',
+        isTiebreak: false,
+        tiebreakTarget: 7,
+        setScores: [],
+        setFinished: false
+      })
     };
 
     this.state.matches.unshift({
       id: newMatchId,
+      sport: sport,
       date: 'Today',
       opponent: opponentName,
       teamUs: 'US',
@@ -805,6 +1518,8 @@ class GameStore {
       currentSet: startingSet,
       scoreUs: 0,
       scoreThem: 0,
+      ringBufferDuration: ringBufferDuration,
+      ...(sport === 'tennis' ? tennisState : {}),
       highlights: []
     });
 

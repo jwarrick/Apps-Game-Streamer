@@ -3,8 +3,8 @@
 // Identical in structure, styling, pulsing tab, and voice mic to Broadcaster
 // ==========================================================================
 
-import { store } from '../services/store.js';
-import { getBroadcastIcon } from './icons.js';
+import { store, getTennisPointDisplay } from '../services/store.js';
+import { getBroadcastIcon, getTennisNetIcon } from './icons.js';
 
 export function renderWatcherView(container, navigate) {
   let isListeningVoice = false;
@@ -20,24 +20,8 @@ export function renderWatcherView(container, navigate) {
             <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4" />
           </video>
 
-          <!-- Top-Left Live Score Overlay (High legibility for older viewers) -->
-          <div class="watcher-score-overlay frosted-glass">
-            <div style="display: flex; flex-direction: column; gap: 4px;">
-              <div style="display: flex; align-items: center; gap: 10px;">
-                <span class="live-badge" style="font-size: 13px; font-weight: 700; padding: 3px 9px; display: inline-flex; align-items: center; gap: 6px;">
-                  ${getBroadcastIcon(13, 'var(--accent-red)')}
-                  <span>LIVE</span>
-                </span>
-                <span style="font-size: 17px; font-weight: 700; color: #ffffff; letter-spacing: 0.2px;" id="w-opponent">vs. Opponent</span>
-              </div>
-              <div style="display: flex; align-items: baseline; gap: 14px; margin-top: 2px;">
-                <span class="tabular-nums" style="font-size: 30px; font-weight: 900; line-height: 1; letter-spacing: 0.5px;" id="w-score-line">0 - 0</span>
-                <span style="font-size: 16px; font-weight: 600; color: #f1f5f9; background: rgba(255, 255, 255, 0.12); padding: 4px 10px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.15);" id="w-set-info">
-                  Set 1 • Sets: 0-0
-                </span>
-              </div>
-            </div>
-          </div>
+          <!-- Top-Left Live Score Overlay Container (Dual-Sport: Volleyball vs Tennis) -->
+          <div id="watcher-score-container"></div>
 
           <!-- Top-Right Actions -->
           <div class="watcher-top-actions">
@@ -93,9 +77,7 @@ export function renderWatcherView(container, navigate) {
 
   // Elements
   const btnBackHub = container.querySelector('#btn-back-hub');
-  const wOpponent = container.querySelector('#w-opponent');
-  const wScoreLine = container.querySelector('#w-score-line');
-  const wSetInfo = container.querySelector('#w-set-info');
+  const watcherScoreContainer = container.querySelector('#watcher-score-container');
 
   const chatEdgeTab = container.querySelector('#chat-edge-tab');
   const chatTabCount = container.querySelector('#chat-tab-count');
@@ -108,6 +90,20 @@ export function renderWatcherView(container, navigate) {
   const inputDrawerMsg = container.querySelector('#input-drawer-msg');
   const btnSendDrawerMsg = container.querySelector('#btn-send-drawer-msg');
   const btnVoiceMic = container.querySelector('#btn-voice-mic');
+
+  function renderTennisPastSetScores(team, s) {
+    if (!s.setScores || s.setScores.length === 0) return '';
+    return s.setScores.map(set => {
+      let val = '?';
+      if (set.us !== undefined && team === 'us') val = set.us;
+      else if (set.them !== undefined && team === 'them') val = set.them;
+      else if (set.score) {
+        const parts = set.score.split('-');
+        val = team === 'us' ? (parts[0] || '?') : (parts[1] || '?');
+      }
+      return `<div class="tennis-set-cell">${val}</div>`;
+    }).join('');
+  }
 
   // Viewer Name Storage
   function getViewerName() {
@@ -314,19 +310,98 @@ export function renderWatcherView(container, navigate) {
   // --- Real-time Updates from Store ---
   function update() {
     const s = store.getState().activeMatch;
-    wOpponent.textContent = `vs. ${s.opponent}`;
-    wScoreLine.textContent = `${s.scoreUs} - ${s.scoreThem}`;
-    wSetInfo.textContent = `Set ${s.currentSet} • Sets: ${s.setsUs}-${s.setsThem}`;
 
-    // Render Drawer Comments and Edge Tab
-    const chatList = store.getState().chat;
-    const isDrawerOpen = chatDrawer.classList.contains('open');
+    if (watcherScoreContainer) {
+      if (s.sport === 'tennis') {
+        const ptDisplay = getTennisPointDisplay(s.pointsUs, s.pointsThem, s.isTiebreak, s.tennisScoringType);
+        const pointsUsDisplay = ptDisplay.us;
+        const pointsThemDisplay = ptDisplay.them;
+
+        let formatLabel = `Set ${s.currentSet}`;
+        if (s.currentSetFormat === 'pro8') formatLabel = '8-Game Pro Set';
+        else if (s.currentSetFormat === 'match_tiebreak_10') formatLabel = '10-Pt Match TB';
+        else if (s.currentSetFormat === 'tiebreak_7') formatLabel = '7-Pt TB';
+
+        watcherScoreContainer.innerHTML = `
+          <div class="watcher-score-overlay frosted-glass" style="padding: 8px 12px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+              <span class="live-badge" style="font-size: 11px; font-weight: 700; padding: 2px 7px; display: inline-flex; align-items: center; gap: 5px;">
+                ${getBroadcastIcon(11, 'var(--accent-red)')}
+                <span>LIVE</span>
+              </span>
+              <span class="sport-badge-card tennis" style="font-size: 10px; padding: 1px 6px;">🎾 Tennis</span>
+              <span style="font-size: 12px; color: var(--text-secondary); margin-left: auto;">
+                ${formatLabel} ${s.isTiebreak ? '• Tiebreak' : ''}
+              </span>
+            </div>
+
+            <div class="tennis-tv-scoreboard" style="box-shadow: none; background: transparent; padding: 0; border: none; cursor: default;">
+              <div class="tennis-row">
+                <div class="tennis-row-team">
+                  <span class="tennis-server-indicator ${s.server === 'us' ? 'active' : ''}">🎾</span>
+                  <span class="tennis-team-name" title="${s.teamName || 'US'}">${s.teamName || 'US'}</span>
+                </div>
+                <div class="tennis-sets-wrap">
+                  ${renderTennisPastSetScores('us', s)}
+                  ${s.currentSetFormat !== 'tiebreak-10' && s.currentSetFormat !== 'tiebreak-7' ? `<div class="tennis-set-cell current">${s.gamesUs || 0}</div>` : ''}
+                </div>
+                <div class="tennis-point-cell tabular-nums">${pointsUsDisplay}</div>
+              </div>
+              <div class="tennis-row">
+                <div class="tennis-row-team">
+                  <span class="tennis-server-indicator ${s.server === 'them' ? 'active' : ''}">🎾</span>
+                  <span class="tennis-team-name" title="${s.opponent || 'OPPONENT'}">${s.opponent || 'OPPONENT'}</span>
+                </div>
+                <div class="tennis-sets-wrap">
+                  ${renderTennisPastSetScores('them', s)}
+                  ${s.currentSetFormat !== 'tiebreak-10' && s.currentSetFormat !== 'tiebreak-7' ? `<div class="tennis-set-cell current">${s.gamesThem || 0}</div>` : ''}
+                </div>
+                <div class="tennis-point-cell tabular-nums">${pointsThemDisplay}</div>
+              </div>
+            </div>
+          </div>
+        `;
+      } else {
+        watcherScoreContainer.innerHTML = `
+          <div class="watcher-score-overlay frosted-glass">
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span class="live-badge" style="font-size: 13px; font-weight: 700; padding: 3px 9px; display: inline-flex; align-items: center; gap: 6px;">
+                  ${getBroadcastIcon(13, 'var(--accent-red)')}
+                  <span>LIVE</span>
+                </span>
+                <span class="sport-badge-card volleyball" style="font-size: 10px; padding: 1px 6px;">🏐 Volleyball</span>
+                <span style="font-size: 17px; font-weight: 700; color: #ffffff; letter-spacing: 0.2px;">vs. ${s.opponent}</span>
+              </div>
+              <div style="display: flex; align-items: baseline; gap: 14px; margin-top: 2px;">
+                <span class="tabular-nums" style="font-size: 30px; font-weight: 900; line-height: 1; letter-spacing: 0.5px;">${s.scoreUs} - ${s.scoreThem}</span>
+                <span style="font-size: 16px; font-weight: 600; color: #f1f5f9; background: rgba(255, 255, 255, 0.12); padding: 4px 10px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.15);">
+                  Set ${s.currentSet} • Sets: ${s.setsUs}-${s.setsThem}
+                </span>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    // Helper to format special pill icons (e.g. isometric tennis net, shovel for dig)
+    function formatCommentText(text) {
+      if (!text) return '';
+      if (text.includes('Net Point')) {
+        text = text.replace(/(?:🎾|🥅)?\s*Net Point/, `${getTennisNetIcon(18, 'chat-tennis-net-img')} Net Point`);
+      }
+      if (text.includes('Amazing Dig')) {
+        text = text.replace(/(?:⛏️|🪏)?\s*Amazing Dig/, '🪏 Amazing Dig');
+      }
+      return text;
+    }
 
     drawerChatList.innerHTML = chatList.map(msg => `
       <div class="chat-bubble">
         <div class="sender">${msg.sender} ${msg.score ? `(Set ${msg.set} • ${msg.score})` : ''}</div>
         <div style="font-weight: ${msg.isCheer ? '700' : '400'}; color: ${msg.isCheer ? 'var(--accent-gold)' : 'inherit'};">
-          ${msg.text}
+          ${formatCommentText(msg.text)}
         </div>
       </div>
     `).join('');

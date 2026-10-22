@@ -128,7 +128,7 @@
 ### B. Streamer Chat & Quick Cheer Drawer
 - **Expandable `(+)` Cheer Drawer**:
   - A discreet `(+)` button opens a floating shelf of 1-tap cheer pills:
-    - ⛏️ **Amazing Dig**
+    - 🪏 **Amazing Dig**
     - 💣 **Crazy Kill**
     - 🔥 **Ace!**
     - 💪 **Big Block!**

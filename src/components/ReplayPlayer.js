@@ -21,6 +21,7 @@ export class ReplayPlayer {
     this.isPlaying = true;
     this.element = null;
     this.video = null;
+    this.handleKeyDown = null;
     this.render();
   }
 
@@ -30,27 +31,9 @@ export class ReplayPlayer {
 
     this.element.innerHTML = `
       <div class="replay-modal">
-        <div class="replay-header">
-          <div>
-            <span class="highlight-badge">Set ${this.clip.set} (${this.clip.score})</span>
-            <span class="highlight-label" style="margin-left: 8px;">${this.clip.label || 'Highlight'}</span>
-          </div>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <button class="apple-btn" id="btn-download-replay" title="Share Clip (Text, AirDrop, or Save to Photos)" style="padding: 4px 10px; font-size: 13px; display: flex; align-items: center; gap: 6px;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
-                <polyline points="16 6 12 2 8 6"></polyline>
-                <line x1="12" y1="2" x2="12" y2="15"></line>
-              </svg>
-              <span>Share</span>
-            </button>
-            <button class="apple-btn" id="btn-close-replay" style="padding: 4px 10px; font-size: 13px;">✕ Close</button>
-          </div>
-        </div>
-
-        <div class="replay-video-box">
+        <div class="replay-video-box" id="replay-video-box">
           ${this.clip.videoUrl ? `
-            <video class="replay-video" id="replay-video-elem" playsinline autoplay>
+            <video class="replay-video" id="replay-video-elem" playsinline autoplay loop>
               <source src="${this.clip.videoUrl}" type="video/mp4" />
             </video>
           ` : `
@@ -65,33 +48,59 @@ export class ReplayPlayer {
               </a>
             </div>
           `}
-        </div>
 
-        ${this.clip.videoUrl ? `
-          <div class="replay-controls">
-            <div class="replay-button-row">
-              <!-- Left & Play & Right: -10s, Play/Pause, +10s -->
-              <div class="replay-actions-left">
+          <!-- Top Overlay: Set/Score, Label, Share, and Close -->
+          <div class="replay-header-overlay" id="replay-header-overlay">
+            <div class="replay-header-info">
+              <span class="highlight-badge frosted-glass" style="box-shadow: 0 2px 8px rgba(0,0,0,0.3);">Set ${this.clip.set} (${this.clip.score})</span>
+              <span class="highlight-label frosted-glass" style="margin-left: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">${this.clip.label || 'Highlight'}</span>
+            </div>
+            <div class="replay-header-actions">
+              <button class="apple-btn frosted-glass" id="btn-download-replay" title="Share Clip (Text, AirDrop, or Save to Photos)" style="padding: 6px 12px; font-size: 13px; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+                  <polyline points="16 6 12 2 8 6"></polyline>
+                  <line x1="12" y1="2" x2="12" y2="15"></line>
+                </svg>
+                <span>Share</span>
+              </button>
+              <button class="btn-exit-circle" id="btn-close-replay" title="Close Replay" aria-label="Close">✕</button>
+            </div>
+          </div>
+
+          <!-- Bottom Overlaid Controls (Floating Capsule Bar) -->
+          ${this.clip.videoUrl ? `
+            <div class="replay-controls-overlay" id="replay-controls-overlay">
+              <div class="replay-controls-bar frosted-glass">
+                <!-- Seek Back -10s -->
                 <button class="apple-btn replay-seek-btn" id="btn-seek-back" title="Rewind 10 seconds">-10s</button>
+                
+                <!-- Play / Pause -->
                 <button class="apple-btn apple-btn-primary replay-play-btn" id="btn-play-pause" title="Play or Pause">
                   ${PAUSE_ICON}
                 </button>
+                
+                <!-- Seek Forward +10s -->
                 <button class="apple-btn replay-seek-btn" id="btn-seek-forward" title="Fast forward 10 seconds">+10s</button>
-              </div>
 
-              <!-- Always visible segmented speed toggles, default 1x -->
-              <div class="speed-toggle-group" id="speed-toggle-group">
-                <button class="speed-btn active" data-speed="1.0">1x</button>
-                <button class="speed-btn" data-speed="0.5">0.5x</button>
-                <button class="speed-btn" data-speed="0.25">0.25x</button>
+                <div class="replay-ctrl-divider"></div>
+
+                <!-- Segmented Speed Toggles -->
+                <div class="speed-toggle-group" id="speed-toggle-group">
+                  <button class="speed-btn active" data-speed="1.0">1x</button>
+                  <button class="speed-btn" data-speed="0.5">0.5x</button>
+                  <button class="speed-btn" data-speed="0.25">0.25x</button>
+                </div>
               </div>
             </div>
-          </div>
-        ` : `
-          <div class="replay-controls" style="justify-content: center; padding: 12px 18px;">
-            <span style="font-size: 12px; color: var(--text-tertiary);">Google Drive File ID: ${this.clip.driveFileId || 'Archived'}</span>
-          </div>
-        `}
+          ` : `
+            <div class="replay-controls-overlay">
+              <div class="replay-controls-bar frosted-glass" style="padding: 6px 16px;">
+                <span style="font-size: 12px; color: var(--text-tertiary);">Google Drive File ID: ${this.clip.driveFileId || 'Archived'}</span>
+              </div>
+            </div>
+          `}
+        </div>
       </div>
     `;
 
@@ -112,8 +121,9 @@ export class ReplayPlayer {
     const btnSeekBack = this.element.querySelector('#btn-seek-back');
     const btnSeekForward = this.element.querySelector('#btn-seek-forward');
     const speedButtons = this.element.querySelectorAll('.speed-btn');
+    const videoBox = this.element.querySelector('#replay-video-box');
 
-    btnClose.onclick = () => this.destroy();
+    if (btnClose) btnClose.onclick = () => this.destroy();
 
     if (btnDownload) {
       btnDownload.onclick = () => shareHighlightVideo(this.clip, btnDownload);
@@ -124,32 +134,50 @@ export class ReplayPlayer {
       if (e.target === this.element) this.destroy();
     };
 
+    const togglePlayPause = () => {
+      if (!this.video) return;
+      if (this.video.paused) {
+        this.video.play();
+        if (btnPlayPause) btnPlayPause.innerHTML = PAUSE_ICON;
+      } else {
+        this.video.pause();
+        if (btnPlayPause) btnPlayPause.innerHTML = PLAY_ICON;
+      }
+    };
+
     if (this.video && btnPlayPause) {
-      btnPlayPause.onclick = () => {
-        if (this.video.paused) {
-          this.video.play();
-          btnPlayPause.innerHTML = PAUSE_ICON;
-        } else {
-          this.video.pause();
-          btnPlayPause.innerHTML = PLAY_ICON;
-        }
+      btnPlayPause.onclick = (e) => {
+        e.stopPropagation();
+        togglePlayPause();
       };
 
+      // Tapping on empty video space toggles play/pause
+      if (videoBox) {
+        videoBox.onclick = (e) => {
+          if (e.target === videoBox || e.target === this.video) {
+            togglePlayPause();
+          }
+        };
+      }
+
       if (btnSeekBack) {
-        btnSeekBack.onclick = () => {
+        btnSeekBack.onclick = (e) => {
+          e.stopPropagation();
           this.video.currentTime = Math.max(0, this.video.currentTime - 10);
         };
       }
 
       if (btnSeekForward) {
-        btnSeekForward.onclick = () => {
+        btnSeekForward.onclick = (e) => {
+          e.stopPropagation();
           this.video.currentTime = Math.min(this.video.duration || 999, this.video.currentTime + 10);
         };
       }
 
       // Speed toggle buttons (only one depressed at a time)
       speedButtons.forEach(btn => {
-        btn.onclick = () => {
+        btn.onclick = (e) => {
+          e.stopPropagation();
           const speed = parseFloat(btn.dataset.speed);
           this.currentSpeed = speed;
           this.video.playbackRate = speed;
@@ -163,9 +191,30 @@ export class ReplayPlayer {
         btnPlayPause.innerHTML = PLAY_ICON;
       };
     }
+
+    // Keyboard controls for convenience
+    this.handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        this.destroy();
+      } else if (e.key === ' ' && this.video) {
+        e.preventDefault();
+        togglePlayPause();
+      } else if (e.key === 'ArrowLeft' && this.video) {
+        e.preventDefault();
+        this.video.currentTime = Math.max(0, this.video.currentTime - 10);
+      } else if (e.key === 'ArrowRight' && this.video) {
+        e.preventDefault();
+        this.video.currentTime = Math.min(this.video.duration || 999, this.video.currentTime + 10);
+      }
+    };
+    window.addEventListener('keydown', this.handleKeyDown);
   }
 
   destroy() {
+    if (this.handleKeyDown) {
+      window.removeEventListener('keydown', this.handleKeyDown);
+      this.handleKeyDown = null;
+    }
     if (this.element && this.element.parentNode) {
       if (this.video) this.video.pause();
       this.element.parentNode.removeChild(this.element);
