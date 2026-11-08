@@ -42,3 +42,94 @@ export function getTennisNetIcon(size = 20, extraClass = "") {
   return `<img src="${TENNIS_NET_DATA_URI}" class="tennis-net-icon ${extraClass}" width="${size}" height="${height}" alt="Tennis Net" style="display: inline-block; vertical-align: middle; object-fit: contain; flex-shrink: 0;" />`;
 }
 
+// Sleek Apple SF Symbols inspired vector icons
+export function getLockIcon(size = 14, color = 'currentColor', extraClass = '') {
+  return `
+    <svg class="gs-icon ${extraClass}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; flex-shrink: 0;">
+      <rect x="4" y="11" width="16" height="11" rx="2.5" ry="2.5" fill="none"/>
+      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+    </svg>
+  `;
+}
+
+export function getUnlockIcon(size = 14, color = 'currentColor', extraClass = '') {
+  return `
+    <svg class="gs-icon ${extraClass}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; flex-shrink: 0;">
+      <rect x="4" y="11" width="16" height="11" rx="2.5" ry="2.5" fill="none"/>
+      <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
+    </svg>
+  `;
+}
+
+export function getMoreIcon(size = 16, color = 'currentColor', extraClass = '') {
+  return `
+    <svg class="gs-icon ${extraClass}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; flex-shrink: 0;">
+      <circle cx="12" cy="12" r="1.2" fill="${color}" stroke="none"/>
+      <circle cx="19" cy="12" r="1.2" fill="${color}" stroke="none"/>
+      <circle cx="5" cy="12" r="1.2" fill="${color}" stroke="none"/>
+    </svg>
+  `;
+}
+
+export function getTrashIcon(size = 14, color = 'currentColor', extraClass = '') {
+  return `
+    <svg class="gs-icon ${extraClass}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; flex-shrink: 0;">
+      <polyline points="3 6 5 6 21 6"/>
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+      <line x1="10" y1="11" x2="10" y2="17"/>
+      <line x1="14" y1="11" x2="14" y2="17"/>
+    </svg>
+  `;
+}
+
+export function getShareIcon(size = 15, color = 'currentColor', extraClass = '') {
+  return `
+    <svg class="gs-icon ${extraClass}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; flex-shrink: 0;">
+      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+      <polyline points="16 6 12 2 8 6"/>
+      <line x1="12" y1="2" x2="12" y2="15"/>
+    </svg>
+  `;
+}
+
+export function getPlayIcon(size = 13, color = 'currentColor', extraClass = '') {
+  return `
+    <svg class="gs-icon ${extraClass}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="${color}" stroke="none" style="display: inline-block; vertical-align: middle; flex-shrink: 0;">
+      <polygon points="6 3 20 12 6 21 6 3"/>
+    </svg>
+  `;
+}
+
+export function getFolderIcon(size = 15, color = 'currentColor', extraClass = '') {
+  return `
+    <svg class="gs-icon ${extraClass}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; flex-shrink: 0;">
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+    </svg>
+  `;
+}
+
+export function getCloudIcon(size = 15, color = 'currentColor', extraClass = '') {
+  return `
+    <svg class="gs-icon ${extraClass}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; flex-shrink: 0;">
+      <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
+    </svg>
+  `;
+}
+
+export function getBugIcon(size = 14, color = 'currentColor', extraClass = '') {
+  return `
+    <svg class="gs-icon ${extraClass}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; flex-shrink: 0;">
+      <rect width="8" height="14" x="8" y="6" rx="4"/>
+      <path d="m19 7-3 2"/>
+      <path d="m5 7 3 2"/>
+      <path d="m19 19-3-2"/>
+      <path d="m5 19 3-2"/>
+      <path d="M20 13h-4"/>
+      <path d="M4 13h4"/>
+      <path d="m10 4 1 2"/>
+      <path d="m14 4-1 2"/>
+    </svg>
+  `;
+}
+
+

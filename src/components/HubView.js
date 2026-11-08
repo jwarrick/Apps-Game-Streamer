@@ -7,46 +7,74 @@ import { ReplayPlayer } from './ReplayPlayer.js';
 import { HighlightReelPlayer } from './HighlightReelPlayer.js';
 import { authService } from '../services/auth.js';
 import { shareHighlightVideo } from '../services/share.js';
-import { getBroadcastIcon } from './icons.js';
+import { getBroadcastIcon, getLockIcon, getUnlockIcon, getMoreIcon, getPlayIcon, getShareIcon, getTrashIcon, getFolderIcon, getBugIcon, getCloudIcon } from './icons.js';
+import { extractDriveFolderId, requestDriveAccessToken, uploadClipToGoogleDrive, uploadHighlightViaMailSlot, downloadClipLocally } from '../services/drive.js';
+import { getLocalClipBlob, deleteLocalMatchBlobs, isClipSyncedToDrive, getMatchSyncStatus, syncPendingClipsForMatch, onSyncStatusChanged, triggerAutoSyncSweep } from '../services/mediaStorage.js';
 
 export function renderHubView(container, navigate) {
   function update() {
     const state = store.getState();
     const active = state.activeMatch;
     const stats = store.getServerStorageStats();
+    const isAdmin = authService.isBroadcaster();
+
+    // Summary calculation for Match Archive header
+    let totalArchiveClips = 0;
+    let totalArchiveBytes = 0;
+    let totalArchiveUnsynced = 0;
+    for (const m of (state.matches || [])) {
+      for (const h of (m.highlights || [])) {
+        totalArchiveClips++;
+        totalArchiveBytes += (h.fileSizeBytes || 3400000);
+        if (!isClipSyncedToDrive(h)) {
+          totalArchiveUnsynced++;
+        }
+      }
+    }
+    const totalArchiveMB = Math.round(totalArchiveBytes / (1024 * 1024));
 
     container.innerHTML = `
       <div class="hub-container">
         <!-- Header -->
         <header class="hub-header">
           <div class="hub-brand">
-            <span style="font-size: 22px; display: inline-flex; align-items: center; gap: 2px;">
+            <span style="font-size: 20px; display: inline-flex; align-items: center; gap: 3px;">
               <span>🏐</span><span>🎾</span>
             </span>
             <h1>Game Streamer</h1>
           </div>
-          <div style="display: flex; gap: 8px;">
-            <button class="apple-btn" id="btn-drive-header" title="Open Google Drive Match Clips Folder">📁 Drive</button>
-            <button class="apple-btn" id="btn-watch-header" title="Open Viewer Experience">👀 Watch</button>
-            <button class="apple-btn apple-btn-primary" id="btn-go-live-header" style="display: inline-flex; align-items: center; gap: 6px;">
-              ${getBroadcastIcon(16, 'currentColor')}
-              <span>Go Live</span>
-            </button>
+          <div class="hub-header-actions" style="display: flex; align-items: center; gap: 8px;">
+            <div id="hub-sync-status-badge" class="sync-unsynced-badge idle" title="0 unsynced" style="cursor: pointer;">0</div>
+            ${isAdmin ? `
+              <button class="apple-btn apple-btn-sm apple-btn-primary" id="btn-go-live-header" title="Start Live Match Broadcast">
+                ${getBroadcastIcon(13, 'currentColor')}
+                <span>Go Live</span>
+              </button>
+              <button class="apple-btn apple-btn-sm" id="btn-admin-lock" title="Admin Active — Tap to Lock" style="border-color: rgba(255, 214, 10, 0.45); color: var(--accent-gold);">
+                ${getUnlockIcon(14, 'currentColor')}
+                <span>Admin</span>
+              </button>
+            ` : `
+              <button class="apple-btn apple-btn-sm" id="btn-admin-lock" title="Broadcaster Admin Access">
+                ${getLockIcon(14, 'currentColor')}
+                <span>Admin</span>
+              </button>
+            `}
           </div>
         </header>
 
-        <!-- Live Hero Section (Displayed only when active) -->
-        ${active.isLive ? `
+        <!-- Live Hero Section -->
+        ${active && active.isLive ? `
           <div class="live-hero-card frosted-glass">
             <div class="live-hero-header">
               <span class="live-badge" style="display: inline-flex; align-items: center; gap: 6px;">
-                ${getBroadcastIcon(14, 'var(--accent-red)')}
+                ${getBroadcastIcon(13, 'var(--accent-red)')}
                 <span>Live Now</span>
               </span>
               <span class="sport-badge-card ${active.sport === 'tennis' ? 'tennis' : 'volleyball'}">
                 ${active.sport === 'tennis' ? '🎾 Tennis' : '🏐 Volleyball'}
               </span>
-              <span class="tabular-nums" style="font-size: 13px; color: var(--text-secondary); margin-left: auto;">${active.viewers} watching</span>
+              <span class="tabular-nums" style="font-size: 13px; color: var(--text-secondary); margin-left: auto;">${active.viewers || 0} watching</span>
             </div>
 
             <div class="live-matchup-title">vs. ${active.opponent}</div>
@@ -99,55 +127,27 @@ export function renderHubView(container, navigate) {
             </button>
           </div>
         ` : `
-          <div class="live-hero-card frosted-glass" style="border-style: dashed; border-color: rgba(255, 255, 255, 0.16);">
-            <div class="live-hero-header">
-              <span class="live-badge" style="background: rgba(255, 255, 255, 0.08); color: var(--text-secondary);">⚪ No Live Game Streaming</span>
+          <div class="live-hero-card frosted-glass" style="text-align: center; padding: 18px 16px;">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+              <span class="live-badge" style="background: rgba(255, 255, 255, 0.05); color: var(--text-tertiary); border-color: rgba(255, 255, 255, 0.08); font-size: 11px; padding: 3px 10px;">
+                ⚪ No Live Match Right Now
+              </span>
             </div>
-
-            <div class="live-matchup-title" style="font-size: 16px; margin: 4px 0 6px 0;">
-              Preview Family Viewer Experience
-            </div>
-            <p style="font-size: 13px; color: var(--text-secondary); margin: 0 0 14px 0;">
-              Test the full-screen live stream video player, overlay comments drawer, voice-to-text dictation, and viewer name tools.
-            </p>
-
-            <button class="apple-btn apple-btn-primary btn-watch-live" id="btn-watch-demo">
-              👀 Open Viewer Experience (Demo Live Stream)
-            </button>
           </div>
         `}
-
-        <!-- Server Cloud Storage Usage Card -->
-        <div class="storage-card frosted-glass">
-          <div class="storage-card-header">
-            <div class="storage-title-wrap">
-              <span style="font-size: 16px;">☁️</span>
-              <span class="storage-title">App Server Storage</span>
-              <span class="storage-plan-badge">5.0 GB Free Tier</span>
-            </div>
-            <div class="storage-stats-text tabular-nums">
-              <strong>${stats.usedMB} MB</strong> / ${stats.maxGB} (${stats.percentUsed}%)
-            </div>
-          </div>
-
-          <div class="storage-bar-track">
-            <div class="storage-bar-fill" style="width: ${Math.max(1.5, Math.min(100, Number(stats.percentUsed)))}%;"></div>
-          </div>
-
-          <div class="storage-card-footer">
-            <span>${stats.activeMatchesCount} active match${stats.activeMatchesCount === 1 ? '' : 'es'} (${stats.activeClipsCount} fast clips) • ${stats.archivedMatchesCount} archived to Drive</span>
-            <span style="color: var(--text-tertiary);">Archive older matches anytime to trim space</span>
-          </div>
-        </div>
 
         <!-- Unified Match Archive -->
         <section class="archive-section">
           <div class="archive-header">
-            <h2>Match Archive & Highlights</h2>
+            <h2 class="archive-summary-title">Match Archive: ${totalArchiveClips} Files, ${totalArchiveMB} MB, ${totalArchiveUnsynced} Sync${totalArchiveUnsynced === 1 ? '' : 's'} Pending</h2>
           </div>
 
           <div class="match-list" id="match-archive-list">
-            ${state.matches.map(m => `
+            ${state.matches.map(m => {
+              const matchHighlights = Array.isArray(m.highlights) ? m.highlights : [];
+              const matchSetScores = Array.isArray(m.setScores) ? m.setScores : [];
+              const syncStatus = getMatchSyncStatus(m);
+              return `
               <div class="match-card frosted-glass">
                 <div class="match-card-header" data-id="${m.id}">
                   <div class="match-info-main">
@@ -158,98 +158,80 @@ export function renderHubView(container, navigate) {
                       <span>${m.date} vs. ${m.opponent}</span>
                     </div>
                     <div class="match-meta tabular-nums">
-                      ${m.highlights.length} Highlight${m.highlights.length === 1 ? '' : 's'} • ${
+                      ${matchHighlights.length} Highlight${matchHighlights.length === 1 ? '' : 's'} • ${
                         m.sport === 'tennis'
-                          ? `Sets: ${formatTennisSetScores(m.setScores) || `${m.setsUs || 0}-${m.setsThem || 0}`}`
-                          : `Sets: ${m.setsUs}-${m.setsThem}`
+                          ? `Sets: ${formatTennisSetScores(matchSetScores) || `${m.setsUs || 0}-${m.setsThem || 0}`}`
+                          : `Sets: ${m.setsUs || 0}-${m.setsThem || 0}`
                       }
                     </div>
                   </div>
-                  <div style="display: flex; align-items: center; gap: 8px;">
-                    ${(m.highlights && m.highlights.length > 0) ? `
-                      <button class="apple-btn btn-play-reel" data-match-id="${m.id}" title="Watch continuous YouTube-style highlight reel with live score overlay">
-                        <span>▶</span> <span>Reel (${m.highlights.length})</span>
+                  <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    ${(matchHighlights.length > 0) ? `
+                      <button class="btn-play-reel" data-match-id="${m.id}" title="Watch continuous highlight reel">
+                        <span>▶</span> <span>Reel (${matchHighlights.length})</span>
                       </button>
                     ` : ''}
 
-                    ${!m.isFinished ? `
-                      <button class="apple-btn apple-btn-primary btn-resume-match" data-match-id="${m.id}" title="Resume live broadcasting this match" style="padding: 4px 10px; font-size: 11px; display: inline-flex; align-items: center; gap: 5px;">
+                    ${isAdmin ? `
+                      <button class="btn-resume-match" data-match-id="${m.id}" title="${m.isLive ? 'Resume Live Broadcast on this device' : 'Resume Match Broadcast on this device'}">
                         ${getBroadcastIcon(13, 'currentColor')}
-                        <span>Resume</span>
+                        <span>${m.isLive ? 'Resume Live' : 'Resume'}</span>
                       </button>
                     ` : ''}
-
-                    ${m.isArchived ? `
-                      <span class="match-archive-badge" title="Server copies deleted; playing via Google Drive">📦 Drive Archived</span>
-                    ` : (!m.isLive ? `
-                      <button class="apple-btn btn-archive-match" data-match-id="${m.id}" data-opponent="${m.opponent}" title="Delete server video files and rely on Google Drive to free up space" style="padding: 3px 8px; font-size: 11px;">
-                        📦 Archive to Drive
-                      </button>
-                    ` : '')}
 
                     ${m.isLive ? `
-                      <span class="match-result-badge live">🔴 Live Now</span>
+                      <span class="match-result-badge live">🔴 Live</span>
                     ` : (m.isFinished ? (
                       (m.winner === 'us' || (!m.winner && m.setsUs > m.setsThem)) ? `
-                        <span class="match-result-badge win">Won ${m.sport === 'tennis' ? (formatTennisSetScores(m.setScores) || `${m.setsUs}-${m.setsThem}`) : `${m.setsUs}-${m.setsThem}`}</span>
+                        <span class="match-result-badge win">Won ${m.sport === 'tennis' ? (formatTennisSetScores(matchSetScores) || `${m.setsUs}-${m.setsThem}`) : `${m.setsUs}-${m.setsThem}`}</span>
                       ` : `
-                        <span class="match-result-badge">Final ${m.sport === 'tennis' ? (formatTennisSetScores(m.setScores) || `${m.setsUs}-${m.setsThem}`) : `${m.setsUs}-${m.setsThem}`}</span>
+                        <span class="match-result-badge">Final ${m.sport === 'tennis' ? (formatTennisSetScores(matchSetScores) || `${m.setsUs}-${m.setsThem}`) : `${m.setsUs}-${m.setsThem}`}</span>
                       `
                     ) : '')}
 
-                    <!-- Broadcaster-Only Match Delete Button (Separated with divider to avoid accidental deletion) -->
-                    <button class="btn-trash-match" data-match-id="${m.id}" data-opponent="${m.opponent}" data-date="${m.date}" data-clips="${(m.highlights || []).length}" title="Delete Match from Database (Broadcaster only)" aria-label="Delete Match">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
-                        <polyline points="3 6 5 6 21 6"></polyline>
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                        <line x1="10" y1="11" x2="10" y2="17"></line>
-                        <line x1="14" y1="11" x2="14" y2="17"></line>
-                      </svg>
-                    </button>
+                    ${isAdmin ? `
+                      <button class="apple-icon-btn btn-match-menu" data-match-id="${m.id}" title="Match Management Options" aria-label="Manage Match">
+                        ${getMoreIcon(16, 'currentColor')}
+                      </button>
+                    ` : ''}
                   </div>
                 </div>
 
-                <!-- Chronological Flat List of Highlights (Ordered by Set & Total Score) -->
+                <!-- Chronological Flat List of Highlights -->
                 <div class="highlight-sublist" id="sublist-${m.id}">
-                  ${m.highlights.length === 0 ? `
+                  ${matchHighlights.length === 0 ? `
                     <div style="font-size: 13px; color: var(--text-tertiary); padding: 8px;">No highlights clipped yet.</div>
-                  ` : sortHighlightsChronologically(m.highlights).map(h => `
+                  ` : sortHighlightsChronologically(matchHighlights).map(h => {
+                    const isSynced = isClipSyncedToDrive(h);
+                    const isDriveOnly = h.storageTier === 'drive' || m.isArchived || !h.videoUrl;
+                    return `
                     <div class="highlight-row">
                       <div class="highlight-left">
-                        <button class="btn-star-clip ${h.type || 'player'} ${h.isStarred ? 'starred' : ''}" data-clip-id="${h.id}" data-match-id="${m.id}" data-type="${h.type || 'player'}" title="${h.type === 'team' ? (h.isStarred ? 'Starred Team Highlight (Click to unstar)' : 'Star Team Highlight') : (h.isStarred ? 'Starred Player Highlight (Click to unstar)' : 'Star Player Highlight')}" aria-label="Star highlight">
+                        <button class="btn-star-clip ${h.type || 'player'} ${h.isStarred ? 'starred' : ''}" data-clip-id="${h.id}" data-match-id="${m.id}" data-type="${h.type || 'player'}" title="${h.type === 'team' ? (h.isStarred ? 'Starred Team Highlight' : 'Star Team Highlight') : (h.isStarred ? 'Starred Player Highlight' : 'Star Player Highlight')}" aria-label="Star highlight">
                           ${h.isStarred ? '★' : '☆'}
                         </button>
                         <span class="highlight-badge tabular-nums">Set ${h.set} (${h.score})</span>
                         <span class="highlight-label">${h.label || 'Highlight'}</span>
                       </div>
-                      <div style="display: flex; align-items: center; gap: 6px;">
-                        ${h.isUploading ? `
-                          <span class="highlight-uploading">⏳ Uploading...</span>
-                        ` : `
-                          ${(m.isArchived || !h.videoUrl) ? `
-                            <span class="drive-clip-tag" title="Saved in Google Drive">📁 Drive</span>
-                          ` : ''}
-                          <button class="apple-btn btn-play-clip" data-clip-id="${h.id}" data-match-id="${m.id}" title="${(m.isArchived || !h.videoUrl) ? 'Watch Highlight via Google Drive' : 'Watch Highlight Replay'}">▶</button>
-                          <button class="btn-share-clip" data-clip-id="${h.id}" data-match-id="${m.id}" title="Share Highlight (Text, AirDrop, or Save to Photos)" aria-label="Share Highlight">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
-                              <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
-                              <polyline points="16 6 12 2 8 6"></polyline>
-                              <line x1="12" y1="2" x2="12" y2="15"></line>
-                            </svg>
-                          </button>
-                        `}
-                        <!-- Broadcaster-Only Trashcan Button (Separated with divider to avoid accidental deletion) -->
-                        <button class="btn-trash-clip" data-clip-id="${h.id}" data-match-id="${m.id}" data-label="${h.label || 'Highlight'}" data-score="${h.score || ''}" data-set="${h.set || 1}" title="Delete Highlight from Archive (Broadcaster only)" aria-label="Delete Highlight">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
-                            <polyline points="3 6 5 6 21 6"></polyline>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                            <line x1="10" y1="11" x2="10" y2="17"></line>
-                            <line x1="14" y1="11" x2="14" y2="17"></line>
-                          </svg>
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        ${isAdmin ? `
+                          <span class="clip-storage-dot ${isDriveOnly ? 'drive' : (isSynced ? 'synced' : 'unsynced')}" title="${isDriveOnly ? 'Archived in Google Drive' : (isSynced ? 'Synced (App + Google Drive)' : '⚠️ Stored locally on phone camera master — Not synced to Google Drive (tap to sync)')}"></span>
+                        ` : ''}
+                        <button class="apple-icon-btn btn-play-clip" data-clip-id="${h.id}" data-match-id="${m.id}" title="Play Highlight Replay">
+                          ${getPlayIcon(12, 'currentColor')}
                         </button>
+                        <button class="apple-icon-btn btn-share-clip" data-clip-id="${h.id}" data-match-id="${m.id}" title="Share Highlight (AirDrop, Text, or Save)">
+                          ${getShareIcon(14, 'currentColor')}
+                        </button>
+                        ${isAdmin ? `
+                          <button class="apple-icon-btn btn-trash-clip" data-clip-id="${h.id}" data-match-id="${m.id}" data-label="${h.label || 'Highlight'}" data-score="${h.score || ''}" data-set="${h.set || 1}" title="Delete Highlight (Admin only)" style="color: var(--text-tertiary);">
+                            ${getTrashIcon(13, 'currentColor')}
+                          </button>
+                        ` : ''}
                       </div>
                     </div>
-                  `).join('')}
+                  `;
+                  }).join('')}
                 </div>
 
                 <!-- Match Comments Transcript Section -->
@@ -268,7 +250,8 @@ export function renderHubView(container, navigate) {
                   `).join('') : '<div style="color: var(--text-tertiary); font-size: 12px;">No comments recorded for this match.</div>'}
                 </div>
               </div>
-            `).join('')}
+            `;
+            }).join('')}
           </div>
         </section>
       </div>
@@ -276,34 +259,35 @@ export function renderHubView(container, navigate) {
 
     // Setup action listeners
     const openWatcher = () => {
-      if (!store.getState().activeMatch.isLive) {
-        store.startDemoStream();
-      }
       navigate('/watch');
     };
 
     const btnWatchLive = container.querySelector('#btn-watch-live');
     if (btnWatchLive) btnWatchLive.onclick = openWatcher;
 
-    const btnWatchDemo = container.querySelector('#btn-watch-demo');
-    if (btnWatchDemo) btnWatchDemo.onclick = openWatcher;
-
-    const btnWatchHeader = container.querySelector('#btn-watch-header');
-    if (btnWatchHeader) btnWatchHeader.onclick = openWatcher;
-
-    const btnDrive = container.querySelector('#btn-drive-header');
-    if (btnDrive) {
-      btnDrive.onclick = () => {
-        showDriveFolderModal();
+    const btnAdminLock = container.querySelector('#btn-admin-lock');
+    if (btnAdminLock) {
+      btnAdminLock.onclick = async () => {
+        if (!authService.isBroadcaster()) {
+          const user = await authService.requestBroadcasterAccess();
+          if (user) {
+            update();
+          }
+        } else {
+          // Instant lock back to pure Watcher view
+          authService.lock();
+          update();
+        }
       };
     }
 
     const btnGoLive = container.querySelector('#btn-go-live-header');
     if (btnGoLive) {
       btnGoLive.onclick = async () => {
-        // Automatically triggers Google Sign-in / credential recognition directly
-        const user = await authService.signInWithGoogle();
-        showMatchSetupModal(navigate, user);
+        const user = await authService.requestBroadcasterAccess();
+        if (user) {
+          showMatchSetupModal(navigate, user);
+        }
       };
     }
 
@@ -335,7 +319,7 @@ export function renderHubView(container, navigate) {
       };
     });
 
-    // Highlight Star / Favorite button (on the very left of each highlight row)
+    // Highlight Star / Favorite button
     container.querySelectorAll('.btn-star-clip').forEach(btn => {
       btn.onclick = (e) => {
         e.stopPropagation();
@@ -347,17 +331,18 @@ export function renderHubView(container, navigate) {
         btn.classList.toggle('starred', isStarred);
         btn.innerHTML = isStarred ? '★' : '☆';
         btn.title = isStarred
-          ? (type === 'team' ? 'Starred Team Highlight (Click to unstar)' : 'Starred Player Highlight (Click to unstar)')
+          ? (type === 'team' ? 'Starred Team Highlight' : 'Starred Player Highlight')
           : (type === 'team' ? 'Star Team Highlight' : 'Star Player Highlight');
       };
     });
 
-    // Play full match highlight reel (YouTube-style continuous highlights with live score overlay)
+    // Play full match highlight reel
     container.querySelectorAll('.btn-play-reel').forEach(btn => {
+      const matchId = btn.dataset.matchId;
+      const match = state.matches.find(m => m.id === matchId);
+
       btn.onclick = (e) => {
         e.stopPropagation();
-        const matchId = btn.dataset.matchId;
-        const match = state.matches.find(m => m.id === matchId);
         if (match && match.highlights && match.highlights.length > 0) {
           new HighlightReelPlayer(match);
         }
@@ -366,15 +351,51 @@ export function renderHubView(container, navigate) {
 
     // Resume match broadcast button
     container.querySelectorAll('.btn-resume-match').forEach(btn => {
-      btn.onclick = (e) => {
+      btn.onclick = async (e) => {
         e.stopPropagation();
+        let broadcaster = authService.getUser();
+        if (!broadcaster) {
+          try {
+            broadcaster = await authService.requestBroadcasterAccess();
+          } catch (err) {
+            return;
+          }
+        }
+        if (!broadcaster) return;
+
         const matchId = btn.dataset.matchId;
         store.resumeMatch(matchId);
         navigate('/stream');
       };
     });
 
-    // Clip share buttons (Opens iOS Share sheet with Save Video / Text / AirDrop on iPhone, Downloads folder on PC)
+    // Match Manage Menu (•••) button
+    container.querySelectorAll('.btn-match-menu').forEach(btn => {
+      const handleMenuClick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const matchId = btn.dataset.matchId;
+        openMatchOptionsMenu(btn, matchId);
+      };
+      btn.onclick = handleMenuClick;
+      btn.ontouchend = handleMenuClick;
+    });
+
+
+    // Tap unsynced dot to trigger repair / sync
+    container.querySelectorAll('.clip-storage-dot.unsynced').forEach(dot => {
+      dot.style.cursor = 'pointer';
+      dot.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const card = dot.closest('.match-card');
+        const header = card?.querySelector('.match-card-header');
+        const matchId = header?.dataset.id;
+        if (matchId) repairAndSyncMatchHighlights(matchId);
+      };
+    });
+
+    // Clip share buttons
     container.querySelectorAll('.btn-share-clip, .btn-download-clip').forEach(btn => {
       btn.onclick = (e) => {
         e.stopPropagation();
@@ -390,25 +411,7 @@ export function renderHubView(container, navigate) {
       };
     });
 
-    // Match Archive button (Delete server video copies to free space, rely on Google Drive)
-    container.querySelectorAll('.btn-archive-match').forEach(btn => {
-      btn.onclick = (e) => {
-        e.stopPropagation();
-        const matchId = btn.dataset.matchId;
-        const opponent = btn.dataset.opponent || 'this';
-        const confirmed = confirm(
-          `Archive "${opponent}" match to Google Drive?\n\n` +
-          `• Server video copies will be deleted to free up cloud storage.\n` +
-          `• All highlights and scores remain permanently preserved in your Google Drive archive.\n` +
-          `• Highlights will be played via Google Drive.`
-        );
-        if (confirmed) {
-          store.archiveMatch(matchId);
-        }
-      };
-    });
-
-    // Highlight Delete button (Broadcaster only: autodetect Google credentials, confirmation dialog)
+    // Highlight Delete button (Admin only)
     container.querySelectorAll('.btn-trash-clip').forEach(btn => {
       btn.onclick = async (e) => {
         e.stopPropagation();
@@ -418,119 +421,626 @@ export function renderHubView(container, navigate) {
         const score = btn.dataset.score || '';
         const setNum = btn.dataset.set || '1';
 
-        // 1. Broadcaster credentials required (autodetected if already signed in, identically to going live)
-        let broadcaster = authService.getUser();
-        if (!broadcaster) {
-          try {
-            broadcaster = await authService.signInWithGoogle();
-          } catch (err) {
-            console.warn('Broadcaster authentication failed or cancelled:', err);
-            return;
+        showConfirmActionModal({
+          title: 'Delete Highlight Clip?',
+          message: 'Are you sure you want to permanently delete this highlight from the archive?',
+          details: [
+            `• Clip: <b>${label}</b> (Set ${setNum}, ${score})`
+          ],
+          confirmText: 'Delete Clip',
+          isDanger: true,
+          onConfirm: () => {
+            store.deleteHighlight(matchId, clipId);
           }
-        }
-
-        if (!broadcaster) {
-          alert('Broadcaster credentials required to delete highlights.');
-          return;
-        }
-
-        // 2. Clear confirmation prompt to prevent accidental deletions
-        const confirmed = window.confirm(
-          `Delete highlight from archive?\n\n` +
-          `• Clip: "${label}" (Set ${setNum}, ${score})\n` +
-          `• Authorized Broadcaster: ${broadcaster.name}\n\n` +
-          `Are you sure you want to permanently delete this highlight?`
-        );
-
-        if (confirmed) {
-          // Clear focus and suppress hover so the row that shifts into this coordinate does not look armed/highlighted
-          if (document.activeElement && typeof document.activeElement.blur === 'function') {
-            document.activeElement.blur();
-          }
-
-          container.classList.add('suppress-trash-hover');
-
-          store.deleteHighlight(matchId, clipId);
-
-          const restoreHover = () => {
-            container.classList.remove('suppress-trash-hover');
-            window.removeEventListener('pointermove', restoreHover);
-            window.removeEventListener('mousemove', restoreHover);
-          };
-
-          window.addEventListener('pointermove', restoreHover, { once: true });
-          window.addEventListener('mousemove', restoreHover, { once: true });
-          setTimeout(restoreHover, 800);
-        }
-      };
-    });
-
-    // Match Delete button (Broadcaster only: autodetect Google credentials, confirmation dialog)
-    container.querySelectorAll('.btn-trash-match').forEach(btn => {
-      btn.onclick = async (e) => {
-        e.stopPropagation();
-        const matchId = btn.dataset.matchId;
-        const opponent = btn.dataset.opponent || 'this match';
-        const date = btn.dataset.date || '';
-        const clipsCount = btn.dataset.clips || '0';
-
-        // 1. Broadcaster credentials required (autodetected if already signed in, identically to going live)
-        let broadcaster = authService.getUser();
-        if (!broadcaster) {
-          try {
-            broadcaster = await authService.signInWithGoogle();
-          } catch (err) {
-            console.warn('Broadcaster authentication failed or cancelled:', err);
-            return;
-          }
-        }
-
-        if (!broadcaster) {
-          alert('Broadcaster credentials required to delete matches.');
-          return;
-        }
-
-        // 2. Clear confirmation prompt to prevent accidental deletions
-        const confirmed = window.confirm(
-          `Completely delete match vs. "${opponent}" (${date})?\n\n` +
-          `• Saved Highlights: ${clipsCount}\n` +
-          `• Authorized Broadcaster: ${broadcaster.name}\n\n` +
-          `⚠️ WARNING: This will permanently remove this match and all its saved clips from the database.\n\n` +
-          `Are you sure you want to delete this entire match?`
-        );
-
-        if (confirmed) {
-          if (document.activeElement && typeof document.activeElement.blur === 'function') {
-            document.activeElement.blur();
-          }
-
-          container.classList.add('suppress-trash-hover');
-
-          store.deleteMatch(matchId);
-
-          const restoreHover = () => {
-            container.classList.remove('suppress-trash-hover');
-            window.removeEventListener('pointermove', restoreHover);
-            window.removeEventListener('mousemove', restoreHover);
-          };
-
-          window.addEventListener('pointermove', restoreHover, { once: true });
-          window.addEventListener('mousemove', restoreHover, { once: true });
-          setTimeout(restoreHover, 800);
-        }
+        });
       };
     });
   }
 
+  let latestSyncStatus = null;
+  function updateSyncBadgeUI() {
+    const badge = container.querySelector('#hub-sync-status-badge');
+    if (!badge) return;
+    const unsynced = latestSyncStatus ? (latestSyncStatus.unsyncedCount || 0) : 0;
+    const isSyncing = latestSyncStatus ? Boolean(latestSyncStatus.isUploading) : false;
+
+    badge.textContent = String(unsynced);
+    if (isSyncing) {
+      badge.className = 'sync-unsynced-badge syncing';
+      badge.title = `${unsynced} unsynced (syncing...)`;
+    } else if (unsynced > 0) {
+      badge.className = 'sync-unsynced-badge pending';
+      badge.title = `${unsynced} unsynced`;
+    } else {
+      badge.className = 'sync-unsynced-badge idle';
+      badge.title = '0 unsynced';
+    }
+
+    if (!badge.dataset.bound) {
+      badge.dataset.bound = 'true';
+      badge.onclick = () => {
+        triggerAutoSyncSweep();
+      };
+    }
+  }
+
+  function handleStateChange() {
+    update();
+    updateSyncBadgeUI();
+  }
+
   update();
-  return store.subscribe(update);
+  const unsubStore = store.subscribe(handleStateChange);
+  const unsubAuth = authService.subscribe(handleStateChange);
+  const unsubSync = onSyncStatusChanged((status) => {
+    latestSyncStatus = status;
+    updateSyncBadgeUI();
+  });
+
+  // Automatically trigger auto-sync sweep upon entering Hub View
+  triggerAutoSyncSweep();
+
+  return () => {
+    unsubSync();
+    unsubStore();
+    unsubAuth();
+  };
+}
+
+function showHubToast(message, duration = 3000) {
+  const existing = document.querySelector('#hub-sync-toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.id = 'hub-sync-toast';
+  toast.className = 'frosted-glass';
+  toast.style.cssText = 'position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); padding: 12px 22px; border-radius: 980px; background: rgba(15, 23, 42, 0.94); color: #fff; z-index: 99999; font-size: 13px; font-weight: 500; border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5); text-align: center; pointer-events: none; max-width: 90vw; animation: fadeIn 0.2s ease-out;';
+  toast.textContent = message;
+  document.body.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transition = 'opacity 0.3s ease';
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+}
+
+async function repairAndSyncMatchHighlights(matchId) {
+  const state = store.getState();
+  const match = state.matches.find(m => m.id === matchId);
+  if (!match) return;
+
+  const syncStatus = getMatchSyncStatus(match);
+  if (syncStatus.unsyncedCount === 0) {
+    showHubToast(`✓ All highlights for "${match.opponent}" are already synced to Google Drive!`);
+    return;
+  }
+
+  showHubToast(`Syncing ${syncStatus.unsyncedCount} pending highlight(s) to Google Drive...`, 5000);
+
+  const res = await syncPendingClipsForMatch(matchId, (statusText) => {
+    showHubToast(statusText, 3500);
+  });
+
+  if (res.needsPhone) {
+    showConfirmActionModal({
+      title: '📱 Highlights Stored on Recording Phone',
+      message: `The ${syncStatus.unsyncedCount} highlight(s) for "${match.opponent}" were recorded on your camera phone and are preserved safely in that phone's camera storage.\n\nTo extract them or push them to Google Drive, tap Launch Recovery Tool below.`,
+      confirmText: '🛠️ Launch Recovery Tool',
+      isDanger: false,
+      onConfirm: () => {
+        window.location.hash = '#/recover';
+      }
+    });
+  } else if (res.success) {
+    showHubToast(`✓ Successfully synced ${res.syncedCount} highlight(s) to Google Drive!`, 4000);
+  }
+}
+
+// Unified Match Manage Menu (•••)
+function openMatchOptionsMenu(anchorBtn, matchId) {
+  if (!authService.isBroadcaster()) return;
+  const existing = document.querySelector('.admin-menu-dropdown');
+  const existingOverlay = document.querySelector('.admin-menu-overlay');
+  if (existing) existing.remove();
+  if (existingOverlay) existingOverlay.remove();
+
+  const state = store.getState();
+  const match = state.matches.find(m => m.id === matchId);
+  if (!match) return;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'admin-menu-overlay';
+
+  const menu = document.createElement('div');
+  menu.className = 'admin-menu-dropdown';
+
+  const rect = anchorBtn.getBoundingClientRect();
+  const menuWidth = Math.min(220, window.innerWidth - 20);
+  let left = rect.right - menuWidth;
+  if (left < 10) left = 10;
+  if (left + menuWidth > window.innerWidth - 10) {
+    left = window.innerWidth - menuWidth - 10;
+  }
+  let top = rect.bottom + 6;
+  if (top + 220 > window.innerHeight) {
+    top = Math.max(10, rect.top - 210);
+  }
+
+  menu.style.position = 'fixed';
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+
+  const syncStatus = getMatchSyncStatus(match);
+  const isDrive = match.storageTier === 'drive' || match.isArchived;
+  const isFullySynced = syncStatus.isFullySynced;
+  const hasUnsynced = syncStatus.unsyncedCount > 0;
+  const hasClips = (match.highlights || []).length > 0;
+
+  menu.innerHTML = `
+    ${isDrive ? `
+      <button class="admin-menu-item" data-action="restore">
+        ${getCloudIcon(14, 'var(--accent-blue)')}
+        <span>Restore to Server</span>
+      </button>
+    ` : hasUnsynced ? `
+      <button class="admin-menu-item warning" data-action="sync-pending" style="color: #ff9f0a;">
+        ${getCloudIcon(14, '#ff9f0a')}
+        <span>Sync ${syncStatus.unsyncedCount} Pending to Drive</span>
+      </button>
+    ` : isFullySynced ? `
+      <button class="admin-menu-item" data-action="purge">
+        ${getTrashIcon(14, 'var(--text-secondary)')}
+        <span>Free Server Space</span>
+      </button>
+    ` : !match.isLive ? `
+      <button class="admin-menu-item" data-action="backup">
+        ${getCloudIcon(14, 'var(--accent-green)')}
+        <span>Backup to Drive</span>
+      </button>
+    ` : ''}
+
+    ${hasClips ? `
+      <button class="admin-menu-item" data-action="diagnostics">
+        ${getBugIcon(14, '#64d2ff')}
+        <span>Diagnostics</span>
+      </button>
+      <button class="admin-menu-item" data-action="recovery" style="color: #ffd60a;">
+        <span style="font-size: 14px;">🛠️</span>
+        <span>Phone Video Recovery</span>
+      </button>
+    ` : ''}
+
+    <div class="admin-menu-divider"></div>
+
+    <button class="admin-menu-item danger" data-action="delete">
+      ${getTrashIcon(14, 'var(--accent-red)')}
+      <span>Delete Match</span>
+    </button>
+  `;
+
+  document.body.appendChild(overlay);
+  document.body.appendChild(menu);
+
+  const closeMenu = () => {
+    overlay.remove();
+    menu.remove();
+  };
+
+  overlay.onclick = closeMenu;
+
+  menu.querySelectorAll('.admin-menu-item').forEach(item => {
+    item.onclick = (e) => {
+      e.stopPropagation();
+      const action = item.dataset.action;
+      closeMenu();
+
+      if (action === 'sync-pending') {
+        repairAndSyncMatchHighlights(matchId);
+      } else if (action === 'restore') {
+        store.restoreMatchToServer(matchId);
+      } else if (action === 'purge') {
+        showConfirmActionModal({
+          title: 'Free App Server Storage?',
+          message: `Reclaim cloud space for "${match.opponent}" match?\n\n• Video files will be deleted from the app server to save hosting quota.\n• All highlights and scores remain permanently preserved in your Google Drive archive folder.\n• Highlights will be played via Google Drive.`,
+          confirmText: 'Free Server Space',
+          isDanger: false,
+          onConfirm: () => {
+            store.purgeServerMatchStorage(matchId);
+            if (match.highlights) {
+              deleteLocalMatchBlobs(match.highlights);
+            }
+          }
+        });
+      } else if (action === 'backup') {
+        showDriveBackupModal(matchId);
+      } else if (action === 'diagnostics') {
+        showMatchDiagnosticsModal(matchId);
+      } else if (action === 'recovery') {
+        window.location.hash = '#/recover';
+      } else if (action === 'delete') {
+        showConfirmActionModal({
+          title: 'Delete Match from Database?',
+          message: 'This will permanently remove this entire match and its clips from the database archive.',
+          details: [
+            `• Opponent: <b>${match.opponent}</b>`,
+            `• Date: ${match.date}`,
+            `• Saved Clips: ${(match.highlights || []).length}`
+          ],
+          confirmText: 'Delete Match',
+          isDanger: true,
+          onConfirm: () => {
+            store.deleteMatch(matchId);
+          }
+        });
+      }
+    };
+  });
+}
+
+// Dedicated Highlights & Storage Diagnostics Modal
+async function showMatchDiagnosticsModal(matchId) {
+  if (!authService.isBroadcaster()) return;
+  const state = store.getState();
+  const match = state.matches.find(m => m.id === matchId);
+  if (!match) return;
+
+  const existing = document.querySelector('#match-diagnostics-modal');
+  if (existing) existing.remove();
+
+  const clips = match.highlights || [];
+  const driveUrl = store.getDriveLocation();
+
+  const modal = document.createElement('div');
+  modal.id = 'match-diagnostics-modal';
+  modal.className = 'apple-modal-overlay';
+  modal.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); display: flex; align-items: center; justify-content: center; z-index: 10000; padding: 16px;';
+
+  modal.innerHTML = `
+    <div class="apple-modal frosted-glass" style="max-width: 520px; width: 100%; max-height: 85vh; display: flex; flex-direction: column; padding: 22px; border-radius: 20px; text-align: left; box-shadow: 0 24px 60px rgba(0,0,0,0.7); background: rgba(22,24,30,0.97); border: 1px solid rgba(100,210,255,0.35);">
+      <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px; margin-bottom: 14px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 24px;">🐞</span>
+          <div>
+            <h3 style="font-size: 17px; font-weight: 700; margin: 0; color: #fff;">Highlights & Storage Diagnostics</h3>
+            <span style="font-size: 12px; color: #64d2ff; font-family: monospace;">Match: ${match.opponent} (${match.id})</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 6px;">
+          <button class="apple-btn" id="btn-copy-match-diag" style="padding: 4px 10px; font-size: 11px; background: rgba(10,132,255,0.3); color: #fff;">📋 Copy</button>
+          <button class="btn-exit-circle" id="btn-close-match-diag" style="width: 28px; height: 28px; font-size: 13px;">✕</button>
+        </div>
+      </div>
+
+      <div style="overflow-y: auto; flex: 1; padding-right: 4px;" id="diag-modal-body">
+        <div style="font-size: 12px; color: #94a3b8; margin-bottom: 12px;">Inspecting storage status for ${clips.length} highlight clip${clips.length === 1 ? '' : 's'}...</div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  const btnClose = modal.querySelector('#btn-close-match-diag');
+  const btnCopy = modal.querySelector('#btn-copy-match-diag');
+  const body = modal.querySelector('#diag-modal-body');
+
+  modal.onclick = (e) => {
+    if (e.target === modal) modal.remove();
+  };
+  btnClose.onclick = () => modal.remove();
+
+  // Async inspect each clip
+  const clipReports = [];
+  for (let i = 0; i < clips.length; i++) {
+    const c = clips[i];
+    let localBlob = null;
+    try {
+      localBlob = await getLocalClipBlob(c.id);
+    } catch (e) {}
+
+    const isBlobUrl = c.videoUrl && c.videoUrl.startsWith('blob:');
+    const isSampleFallback = !c.videoUrl || c.videoUrl.includes('sample-highlight.mp4');
+    const isCloudStorage = c.videoUrl && c.videoUrl.includes('firebasestorage.googleapis.com');
+
+    clipReports.push({
+      index: i + 1,
+      id: c.id,
+      label: c.label,
+      set: c.set,
+      score: c.score,
+      configuredVideoUrl: c.videoUrl || 'None',
+      storageTier: c.storageTier || 'server',
+      hasLocalIndexedDBBlob: !!localBlob,
+      localBlobSizeBytes: localBlob ? localBlob.size : 0,
+      isBlobUrl,
+      isSampleFallback,
+      isCloudStorage,
+      statusSummary: localBlob
+        ? 'Real camera video preserved in this device IndexedDB'
+        : (isCloudStorage ? 'Synced to Cloud Storage' : 'Sample fallback on this device (phone has camera clip)')
+    });
+  }
+
+  const fullReport = {
+    appVersion: 'v1.3.1',
+    timestamp: new Date().toISOString(),
+    matchId: match.id,
+    matchOpponent: match.opponent,
+    isFinished: match.isFinished,
+    cloudStorageBucket: 'gamestreamer-live.firebasestorage.app',
+    cloudStorageStatus: 'Pending Activation in Firebase Console (https://console.firebase.google.com/project/gamestreamer-live/storage)',
+    driveFolderUrl: driveUrl,
+    highlightsCount: clips.length,
+    clips: clipReports
+  };
+
+  btnCopy.onclick = () => {
+    navigator.clipboard.writeText(JSON.stringify(fullReport, null, 2)).then(() => {
+      btnCopy.textContent = '✓ Copied!';
+      setTimeout(() => { btnCopy.textContent = '📋 Copy'; }, 2000);
+    }).catch(() => {});
+  };
+
+  body.innerHTML = `
+    <!-- Cloud Storage Status Banner -->
+    <div style="background: rgba(255,149,0,0.14); border: 1px solid rgba(255,149,0,0.4); border-radius: 12px; padding: 12px; margin-bottom: 14px; font-size: 12px; line-height: 1.45;">
+      <div style="font-weight: 700; color: #ffb340; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+        <span>☁️ Cloud Video Storage</span>
+        <span style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(255,149,0,0.3); color: #fff;">Setup Required</span>
+      </div>
+      <div style="color: #cbd5e1; font-size: 11.5px;">
+        To stream full camera highlights from your phone across to your computer and watchers, activate Firebase Cloud Storage in the Firebase Console:
+      </div>
+      <a href="https://console.firebase.google.com/project/gamestreamer-live/storage" target="_blank" rel="noopener noreferrer" class="apple-btn" style="display: inline-block; margin-top: 8px; font-size: 11px; padding: 5px 10px; background: rgba(255,149,0,0.25); color: #fff; text-decoration: none; border: 1px solid rgba(255,149,0,0.5);">
+        ▶ Open Firebase Console & Click 'Get Started' ↗
+      </a>
+    </div>
+
+    <!-- Highlights Storage Table -->
+    <div style="font-weight: 700; color: #fff; font-size: 13px; margin-bottom: 8px;">Highlight Clips (${clips.length}):</div>
+    ${clipReports.length === 0 ? `
+      <div style="color: #64748b; font-size: 12px;">No highlights recorded for this match yet.</div>
+    ` : clipReports.map(c => `
+      <div style="background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; font-size: 11.5px; font-family: monospace;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+          <span style="font-weight: 700; color: #fff; font-size: 12px;">[${c.index}] ${c.label} (Set ${c.set}, ${c.score})</span>
+          <span style="color: ${c.hasLocalIndexedDBBlob ? '#30d158' : '#ffd60a'}; font-size: 10.5px;">
+            ${c.hasLocalIndexedDBBlob ? `💾 Local Camera Blob (${(c.localBlobSizeBytes / 1024 / 1024).toFixed(1)} MB)` : '☁️ Server / Remote'}
+          </span>
+        </div>
+        <div style="color: #94a3b8; font-size: 10.5px; margin-bottom: 3px;">
+          <b>ID:</b> <span style="color: #64d2ff;">${c.id}</span>
+        </div>
+        <div style="color: #94a3b8; font-size: 10.5px; margin-bottom: 3px; word-break: break-all;">
+          <b>Server URL:</b> <span style="color: ${c.isBlobUrl ? '#ff453a' : '#ffd60a'};">${c.configuredVideoUrl}</span>
+        </div>
+        <div style="padding: 4px 8px; border-radius: 6px; background: ${c.hasLocalIndexedDBBlob ? 'rgba(48,209,88,0.12)' : 'rgba(255,149,0,0.12)'}; color: ${c.hasLocalIndexedDBBlob ? '#30d158' : '#ffb340'}; font-size: 10.5px; margin-top: 5px;">
+          ${c.hasLocalIndexedDBBlob ? '✅ This device recorded and holds the real camera footage in IndexedDB.' : 'ℹ️ Remote device: Plays sample video until Cloud Storage is activated in Firebase Console.'}
+        </div>
+      </div>
+    `).join('')}
+  `;
+}
+
+// Dedicated Google Drive Archiving Modal (Direct Google API Upload & Download/Open Folder Fallback)
+function showDriveBackupModal(matchId) {
+  const state = store.getState();
+  const match = state.matches.find(m => m.id === matchId);
+  if (!match) return;
+
+  const existing = document.querySelector('#drive-backup-modal');
+  if (existing) existing.remove();
+
+  const driveUrl = store.getDriveLocation();
+  const folderId = extractDriveFolderId(driveUrl);
+  const clips = match.highlights || [];
+
+  const modal = document.createElement('div');
+  modal.id = 'drive-backup-modal';
+  modal.className = 'apple-modal-overlay';
+  modal.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.78); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); display: flex; align-items: center; justify-content: center; z-index: 10000; padding: 20px;';
+
+  modal.innerHTML = `
+    <div class="apple-modal frosted-glass" style="max-width: 440px; width: 100%; padding: 26px; border-radius: 20px; text-align: left; box-shadow: 0 24px 60px rgba(0,0,0,0.6); background: rgba(28,28,32,0.96); border: 1px solid rgba(255,255,255,0.16);">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 32px;">📁</span>
+          <div>
+            <h3 style="font-size: 19px; font-weight: 700; margin: 0; color: #fff;">Archive to Google Drive</h3>
+            <span style="font-size: 13px; color: var(--text-secondary);">${match.opponent ? `vs. ${match.opponent}` : 'Match'} (${clips.length} clip${clips.length === 1 ? '' : 's'})</span>
+          </div>
+        </div>
+        <button class="btn-exit-circle" id="btn-close-drive-modal" style="width: 28px; height: 28px; font-size: 14px;">✕</button>
+      </div>
+
+      <div style="background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px; margin: 16px 0; font-size: 13px; color: #ccc;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+          <span style="color: var(--text-tertiary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Target Google Drive Folder</span>
+          <a href="${driveUrl}" target="_blank" rel="noopener noreferrer" style="color: #64d2ff; text-decoration: none; font-size: 12px; font-weight: 600;">Open Folder ↗</a>
+        </div>
+        <div style="font-family: monospace; font-size: 11px; word-break: break-all; color: #fff; line-height: 1.4;">
+          ${driveUrl}
+        </div>
+      </div>
+
+      <div id="drive-upload-status" style="display: none; margin-bottom: 16px; padding: 10px 14px; border-radius: 10px; background: rgba(10, 132, 255, 0.15); border: 1px solid rgba(10, 132, 255, 0.3); font-size: 13px; color: #64d2ff;">
+        <span id="drive-upload-status-text">Uploading to Google Drive...</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <button class="apple-btn apple-btn-primary" id="btn-drive-direct-upload" style="padding: 12px 16px; font-size: 14px; font-weight: 600; justify-content: center; display: flex; align-items: center; gap: 8px;">
+          <span>⚡ Auto-Upload to Google Drive Folder</span>
+        </button>
+
+        <button class="apple-btn frosted-glass" id="btn-drive-download-open" style="padding: 12px 16px; font-size: 14px; justify-content: center; display: flex; align-items: center; gap: 8px; border: 1px solid rgba(255,255,255,0.18);">
+          <span>📥 Download ${clips.length} MP4 File${clips.length === 1 ? '' : 's'} & Open Folder</span>
+        </button>
+      </div>
+
+      <p style="font-size: 11px; color: var(--text-tertiary); margin: 14px 0 0 0; line-height: 1.4; text-align: center;">
+        Clips stay immediately playable from the server while permanently preserved in your Drive archive.
+      </p>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  const btnClose = modal.querySelector('#btn-close-drive-modal');
+  const btnDirectUpload = modal.querySelector('#btn-drive-direct-upload');
+  const btnDownloadOpen = modal.querySelector('#btn-drive-download-open');
+  const statusBox = modal.querySelector('#drive-upload-status');
+  const statusText = modal.querySelector('#drive-upload-status-text');
+
+  const close = () => modal.remove();
+  btnClose.onclick = close;
+  modal.onclick = (e) => { if (e.target === modal) close(); };
+
+  // 1. Direct Google Drive API Upload via Private Mail Slot
+  btnDirectUpload.onclick = async () => {
+    statusBox.style.display = 'block';
+    statusText.textContent = 'Pushing highlights to your Google Drive folder...';
+    btnDirectUpload.disabled = true;
+
+    try {
+      let uploadedCount = 0;
+      let missingPhoneBlobCount = 0;
+
+      for (let i = 0; i < clips.length; i++) {
+        const clip = clips[i];
+        if (isClipSyncedToDrive(clip)) {
+          uploadedCount++;
+          continue;
+        }
+
+        statusText.textContent = `Uploading ${i + 1} of ${clips.length}: ${clip.label || 'Highlight'} to Google Drive...`;
+
+        let blob = null;
+        try {
+          blob = await getLocalClipBlob(clip.id);
+        } catch (e) {}
+
+        if ((!blob || blob.size === 0) && clip.videoUrl && !clip.videoUrl.startsWith('blob:')) {
+          try {
+            const res = await fetch(clip.videoUrl);
+            if (res.ok) blob = await res.blob();
+          } catch (e) {}
+        }
+
+        if (!blob || blob.size === 0) {
+          missingPhoneBlobCount++;
+          continue;
+        }
+
+        try {
+          const res = await uploadHighlightViaMailSlot({
+            ...clip,
+            matchDate: match.date,
+            opponent: match.opponent,
+            comment: clip.comment || clip.label
+          }, blob);
+          if (res && res.fileId) {
+            clip.driveFileId = res.fileId;
+            clip.driveUrl = res.webViewLink;
+            clip.videoUrl = res.downloadUrl;
+            clip.cloudUploaded = true;
+            clip.storageTier = 'synced';
+            uploadedCount++;
+            store.updateClipCloudDetails(matchId, clip.id, {
+              driveFileId: res.fileId,
+              driveUrl: res.webViewLink,
+              videoUrl: res.downloadUrl,
+              storageTier: 'synced',
+              cloudUploaded: true
+            });
+          }
+        } catch (err) {
+          console.warn('[DriveModal] Mail slot clip upload failed:', err);
+        }
+      }
+
+      if (missingPhoneBlobCount > 0 && uploadedCount < clips.length) {
+        statusText.textContent = `⚠️ ${missingPhoneBlobCount} clip(s) are stored on the camera phone that recorded them. Open GameStreamer on that phone to complete sync!`;
+        btnDirectUpload.disabled = false;
+      } else {
+        statusText.textContent = `✓ Successfully saved ${uploadedCount} of ${clips.length} highlights directly to your Google Drive!`;
+        store.backupMatchToDrive(matchId);
+        store.saveState();
+        setTimeout(close, 2200);
+      }
+    } catch (err) {
+      statusText.textContent = `Upload issue: ${err.message}. You can use "Download & Open Folder" below.`;
+      btnDirectUpload.disabled = false;
+    }
+  };
+
+  // 2. Download files & Open Drive Folder
+  btnDownloadOpen.onclick = async () => {
+    btnDownloadOpen.disabled = true;
+    statusBox.style.display = 'block';
+    statusText.textContent = 'Preparing video files for download...';
+
+    for (let i = 0; i < clips.length; i++) {
+      statusText.textContent = `Downloading ${i + 1} of ${clips.length}...`;
+      await downloadClipLocally(clips[i], match.opponent);
+    }
+
+    statusText.textContent = 'Opening Google Drive folder... Drag & drop the downloaded files into it!';
+    window.open(driveUrl, '_blank');
+    setTimeout(close, 2500);
+  };
+}
+
+// Clean In-App Action Confirmation Modal (Replaces browser window.confirm to avoid iOS Safari popup issues)
+function showConfirmActionModal({ title, message, details = [], confirmText = 'Delete', isDanger = true, onConfirm }) {
+  const existing = document.querySelector('#confirm-action-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'confirm-action-modal';
+  modal.className = 'apple-modal-overlay';
+  modal.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.72); backdrop-filter: blur(12px); display: flex; align-items: center; justify-content: center; z-index: 10000; padding: 20px;';
+
+  modal.innerHTML = `
+    <div class="apple-modal frosted-glass" style="max-width: 380px; width: 100%; padding: 24px; border-radius: 20px; text-align: left; box-shadow: 0 20px 40px rgba(0,0,0,0.5); background: rgba(28,28,30,0.95); border: 1px solid rgba(255,255,255,0.14);">
+      <div style="font-size: 28px; margin-bottom: 8px;">🗑️</div>
+      <h3 style="font-size: 18px; font-weight: 700; margin: 0 0 6px 0; color: #fff;">${title}</h3>
+      <p style="font-size: 13px; color: var(--text-secondary, #999); margin: 0 0 14px 0; line-height: 1.45;">
+        ${message}
+      </p>
+
+      ${details.length > 0 ? `
+        <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; font-size: 13px; color: #ddd; display: flex; flex-direction: column; gap: 4px;">
+          ${details.map(d => `<div>${d}</div>`).join('')}
+        </div>
+      ` : ''}
+
+      <div style="display: flex; gap: 10px; justify-content: flex-end;">
+        <button class="apple-btn" id="btn-cancel-confirm" style="flex: 1; padding: 10px 14px; font-size: 14px; border-radius: 10px;">Cancel</button>
+        <button class="apple-btn ${isDanger ? 'apple-btn-danger' : 'apple-btn-primary'}" id="btn-execute-confirm" style="flex: 1; padding: 10px 14px; font-size: 14px; font-weight: 600; border-radius: 10px;">${confirmText}</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  const btnCancel = modal.querySelector('#btn-cancel-confirm');
+  const btnExecute = modal.querySelector('#btn-execute-confirm');
+
+  const close = () => modal.remove();
+
+  btnCancel.onclick = close;
+  modal.onclick = (e) => {
+    if (e.target === modal) close();
+  };
+
+  btnExecute.onclick = () => {
+    close();
+    if (typeof onConfirm === 'function') onConfirm();
+  };
 }
 
 // Opponent & Sport Setup Modal once Google Credential is verified
 function showMatchSetupModal(navigate, user) {
-  const state = store.getState();
-  const unfinishedMatch = state.matches.find(m => !m.isFinished);
-
   let currentSport = localStorage.getItem('gamestreamer_last_sport') || 'volleyball';
   let tennisScoringType = 'ad'; // 'ad' | 'no-ad'
   let currentSetFormat = 'standard'; // 'standard' | 'pro8' | 'match_tiebreak_10' | 'tiebreak_7'
@@ -544,47 +1054,8 @@ function showMatchSetupModal(navigate, user) {
   modal.className = 'simple-modal-backdrop';
   modal.innerHTML = `
     <div class="simple-modal" style="max-width: 420px; max-height: 90vh; overflow-y: auto;">
-      <div style="display: flex; align-items: center; justify-content: space-between;">
-        <h3>Broadcast Setup</h3>
-        <span style="font-size: 12px; color: var(--accent-green);">● Verified</span>
-      </div>
-      <p style="font-size: 12px; color: var(--text-secondary); margin: 4px 0 14px 0;">Logged in as <b>${user.name}</b></p>
-      
-      <!-- Option 1: Quick Resume Unfinished Match if present -->
-      ${unfinishedMatch ? `
-        <div style="background: rgba(255, 214, 10, 0.08); border: 1px solid rgba(255, 214, 10, 0.35); border-radius: 12px; padding: 12px 14px; margin-bottom: 16px;">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-            <span style="font-size: 11px; font-weight: 800; color: var(--accent-gold); letter-spacing: 1px; text-transform: uppercase;">Match In Progress</span>
-            <span style="font-size: 11px; color: var(--text-secondary);">${unfinishedMatch.date}</span>
-          </div>
-          <div style="font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 2px; display: flex; align-items: center; gap: 8px;">
-            <span class="sport-badge-card ${unfinishedMatch.sport === 'tennis' ? 'tennis' : 'volleyball'}">${unfinishedMatch.sport === 'tennis' ? '🎾 Tennis' : '🏐 Volleyball'}</span>
-            <span>vs. ${unfinishedMatch.opponent}</span>
-          </div>
-          <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 10px;">
-            ${unfinishedMatch.sport === 'tennis'
-              ? `Set ${unfinishedMatch.currentSet || 1} • Games: ${unfinishedMatch.gamesUs || 0}-${unfinishedMatch.gamesThem || 0} • Sets: ${formatTennisSetScores(unfinishedMatch.setScores) || '0-0'} • ${(unfinishedMatch.highlights || []).length} highlights saved`
-              : `Set ${unfinishedMatch.currentSet || 1} • Score: ${unfinishedMatch.scoreUs || 0} - ${unfinishedMatch.scoreThem || 0} • Sets: ${unfinishedMatch.setsUs || 0}-${unfinishedMatch.setsThem || 0} • ${(unfinishedMatch.highlights || []).length} highlights saved`
-            }
-          </div>
-          <button class="apple-btn apple-btn-primary" id="btn-resume-in-progress" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; padding: 10px 14px;">
-            ${getBroadcastIcon(16, 'currentColor')}
-            <span>Resume Match & Append Clips</span>
-          </button>
-        </div>
-
-        <div style="text-align: center; color: var(--text-tertiary); font-size: 11px; font-weight: 700; letter-spacing: 1px; margin: 12px 0; display: flex; align-items: center; gap: 10px;">
-          <span style="flex: 1; height: 1px; background: var(--border-subtle);"></span>
-          <span>OR START NEW MATCH</span>
-          <span style="flex: 1; height: 1px; background: var(--border-subtle);"></span>
-        </div>
-      ` : ''}
-
       <!-- Sport Selection Segmented Buttons -->
-      <label style="font-size: 11px; font-weight: 700; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px;">
-        Select Sport:
-      </label>
-      <div class="sport-selector-row">
+      <div class="sport-selector-row" style="margin-bottom: 14px;">
         <button class="sport-choice-btn ${currentSport === 'volleyball' ? 'active' : ''}" id="btn-sport-volleyball" type="button">
           <span class="sport-icon">🏐</span>
           <span>Volleyball</span>
@@ -595,11 +1066,11 @@ function showMatchSetupModal(navigate, user) {
         </button>
       </div>
 
-      <!-- Opponent Name -->
-      <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 6px;">
-        Opponent Name:
-      </label>
-      <input type="text" class="simple-input" id="input-opponent" placeholder="Opponent (e.g. Lincoln High)" value="${unfinishedMatch ? '' : 'Lincoln High'}" />
+      <!-- Opponent Name with 'vs.' in same row -->
+      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+        <span style="font-size: 16px; font-weight: 700; color: var(--text-secondary);">vs.</span>
+        <input type="text" class="simple-input" id="input-opponent" placeholder="Opponent (e.g. Lincoln High)" value="" style="flex: 1;" />
+      </div>
 
       <!-- Cancel and Start Stream buttons placed directly below opponent name entry -->
       <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px;">
@@ -698,7 +1169,6 @@ function showMatchSetupModal(navigate, user) {
   const btnCancel = modal.querySelector('#btn-cancel-modal');
   const btnConfirm = modal.querySelector('#btn-confirm-go-live');
   const inputOpponent = modal.querySelector('#input-opponent');
-  const btnResumeInProgress = modal.querySelector('#btn-resume-in-progress');
 
   const btnSportVolleyball = modal.querySelector('#btn-sport-volleyball');
   const btnSportTennis = modal.querySelector('#btn-sport-tennis');
@@ -928,56 +1398,53 @@ function showMatchSetupModal(navigate, user) {
     }
   };
 
-  if (btnResumeInProgress && unfinishedMatch) {
-    btnResumeInProgress.onclick = () => {
-      store.resumeMatch(unfinishedMatch.id);
-      modal.remove();
-      navigate('/stream');
-    };
-  }
-
   btnCancel.onclick = () => modal.remove();
 
   const startNew = () => {
-    const opponent = inputOpponent.value.trim() || 'Opponent';
+    try {
+      const opponent = inputOpponent.value.trim() || 'Opponent';
 
-    // Calculate final setsUs and setsThem
-    let finalSetsUs = setsUs;
-    let finalSetsThem = setsThem;
-    let finalSetScores = [];
+      // Calculate final setsUs and setsThem
+      let finalSetsUs = setsUs;
+      let finalSetsThem = setsThem;
+      let finalSetScores = [];
 
-    if (currentSport === 'tennis' && startingSet > 1) {
-      finalSetsUs = 0;
-      finalSetsThem = 0;
-      finalSetScores = tennisPriorSets.map((s, idx) => {
-        const isUnknown = !!s.isUnknown;
-        const winner = isUnknown ? s.winner : (s.us > s.them ? 'us' : 'them');
-        if (winner === 'us') finalSetsUs++;
-        else finalSetsThem++;
-        return {
-          setNumber: idx + 1,
-          us: isUnknown ? '?' : s.us,
-          them: isUnknown ? '?' : s.them,
-          score: isUnknown ? '?' : `${s.us}-${s.them}`,
-          isUnknown,
-          winner
-        };
+      if (currentSport === 'tennis' && startingSet > 1) {
+        finalSetsUs = 0;
+        finalSetsThem = 0;
+        finalSetScores = (tennisPriorSets || []).map((s, idx) => {
+          const isUnknown = !!s.isUnknown;
+          const winner = isUnknown ? s.winner : (s.us > s.them ? 'us' : 'them');
+          if (winner === 'us') finalSetsUs++;
+          else finalSetsThem++;
+          return {
+            setNumber: idx + 1,
+            us: isUnknown ? '?' : s.us,
+            them: isUnknown ? '?' : s.them,
+            score: isUnknown ? '?' : `${s.us}-${s.them}`,
+            isUnknown,
+            winner
+          };
+        });
+      }
+
+      store.startBroadcast(opponent, {
+        sport: currentSport,
+        startingSet,
+        setsUs: finalSetsUs,
+        setsThem: finalSetsThem,
+        tennisScoringType,
+        currentSetFormat,
+        server: initialServer,
+        setScores: finalSetScores,
+        ringBufferDuration: currentSport === 'tennis' ? 30 : 20
       });
+    } catch (err) {
+      console.error('Error starting broadcast:', err);
+    } finally {
+      modal.remove();
+      navigate('/stream');
     }
-
-    store.startBroadcast(opponent, {
-      sport: currentSport,
-      startingSet,
-      setsUs: finalSetsUs,
-      setsThem: finalSetsThem,
-      tennisScoringType,
-      currentSetFormat,
-      server: initialServer,
-      setScores: finalSetScores,
-      ringBufferDuration: currentSport === 'tennis' ? 30 : 20
-    });
-    modal.remove();
-    navigate('/stream');
   };
 
   btnConfirm.onclick = startNew;
@@ -987,103 +1454,3 @@ function showMatchSetupModal(navigate, user) {
   inputOpponent.focus();
 }
 
-// Dedicated Google Drive Location Modal with explicit Cancel, Change, and Open buttons
-function showDriveFolderModal() {
-  const currentUrl = store.getDriveLocation();
-  const modal = document.createElement('div');
-  modal.className = 'simple-modal-backdrop';
-  modal.innerHTML = `
-    <div class="simple-modal" style="max-width: 440px;">
-      <div style="display: flex; align-items: center; justify-content: space-between;">
-        <h3 style="display: flex; align-items: center; gap: 8px;">
-          <span>📁</span>
-          <span>Google Drive Archive</span>
-        </h3>
-        <button class="apple-btn" id="btn-drive-dialog-close" style="padding: 4px 10px; font-size: 12px;">✕</button>
-      </div>
-
-      <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.4; margin: 0;">
-        Match highlight clips and archived footage are backed up to your Google Drive location:
-      </p>
-
-      <div style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 12px; word-break: break-all; font-family: ui-monospace, monospace; font-size: 12px; color: #fff;" id="drive-modal-display-url">
-        ${currentUrl}
-      </div>
-
-      <div id="drive-edit-container" style="display: none; flex-direction: column; gap: 8px;">
-        <label style="font-size: 11px; font-weight: 700; color: var(--text-tertiary); text-transform: uppercase;">
-          Enter New Google Drive Folder Link:
-        </label>
-        <input type="text" class="simple-input" id="input-new-drive-url" value="${currentUrl}" placeholder="https://drive.google.com/drive/folders/..." style="font-size: 13px; padding: 10px 12px;" />
-        <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px;">
-          <button class="apple-btn" id="btn-cancel-edit-drive" style="padding: 6px 12px; font-size: 12px;">Cancel Edit</button>
-          <button class="apple-btn apple-btn-primary" id="btn-save-edit-drive" style="padding: 6px 14px; font-size: 12px; font-weight: 600;">Save Location</button>
-        </div>
-      </div>
-
-      <!-- Action buttons: Cancel on left, Change and Open on right -->
-      <div id="drive-actions-row" style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px;">
-        <button class="apple-btn" id="btn-drive-dialog-cancel">Cancel</button>
-        <div style="display: flex; gap: 8px;">
-          <button class="apple-btn" id="btn-drive-dialog-change">Change</button>
-          <button class="apple-btn apple-btn-primary" id="btn-drive-dialog-open" style="font-weight: 600;">Open</button>
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(modal);
-
-  const btnClose = modal.querySelector('#btn-drive-dialog-close');
-  const btnCancel = modal.querySelector('#btn-drive-dialog-cancel');
-  const btnOpen = modal.querySelector('#btn-drive-dialog-open');
-  const btnChange = modal.querySelector('#btn-drive-dialog-change');
-  const editContainer = modal.querySelector('#drive-edit-container');
-  const actionsRow = modal.querySelector('#drive-actions-row');
-  const inputNewDriveUrl = modal.querySelector('#input-new-drive-url');
-  const displayUrl = modal.querySelector('#drive-modal-display-url');
-  const btnCancelEdit = modal.querySelector('#btn-cancel-edit-drive');
-  const btnSaveEdit = modal.querySelector('#btn-save-edit-drive');
-
-  const closeModal = () => modal.remove();
-
-  btnClose.onclick = closeModal;
-  btnCancel.onclick = closeModal;
-  modal.onclick = (e) => {
-    if (e.target === modal) closeModal();
-  };
-
-  btnOpen.onclick = () => {
-    window.open(store.getDriveLocation(), '_blank');
-    closeModal();
-  };
-
-  btnChange.onclick = () => {
-    editContainer.style.display = 'flex';
-    actionsRow.style.display = 'none';
-    inputNewDriveUrl.focus();
-    inputNewDriveUrl.select();
-  };
-
-  btnCancelEdit.onclick = () => {
-    editContainer.style.display = 'none';
-    actionsRow.style.display = 'flex';
-    inputNewDriveUrl.value = store.getDriveLocation();
-  };
-
-  const saveLocation = () => {
-    const val = inputNewDriveUrl.value.trim();
-    if (val) {
-      store.setDriveLocation(val);
-      displayUrl.textContent = val;
-    }
-    editContainer.style.display = 'none';
-    actionsRow.style.display = 'flex';
-  };
-
-  btnSaveEdit.onclick = saveLocation;
-  inputNewDriveUrl.onkeydown = (e) => {
-    if (e.key === 'Enter') saveLocation();
-    if (e.key === 'Escape') btnCancelEdit.onclick();
-  };
-}

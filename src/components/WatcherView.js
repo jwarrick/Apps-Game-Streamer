@@ -5,6 +5,7 @@
 
 import { store, getTennisPointDisplay } from '../services/store.js';
 import { getBroadcastIcon, getTennisNetIcon } from './icons.js';
+import { webrtcService } from '../services/webrtc.js';
 
 export function renderWatcherView(container, navigate) {
   let isListeningVoice = false;
@@ -16,18 +17,26 @@ export function renderWatcherView(container, navigate) {
       <!-- Fullscreen Live Video Area -->
       <div class="watcher-main" id="watcher-main">
         <div class="watcher-video-wrapper">
-          <video class="watcher-video" id="live-player" autoplay playsinline muted loop>
-            <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4" />
-          </video>
+          <video class="watcher-video" id="live-player" autoplay playsinline muted></video>
+
+          <!-- Live WebRTC Stream Connection Indicator & End State Screen -->
+          <div class="watcher-stream-status frosted-glass" id="stream-status-badge" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(0,0,0,0.8); z-index: 2; padding: 24px; text-align: center;">
+            <div id="stream-status-icon" style="font-size: 38px; display: none;">🏆</div>
+            <div id="stream-status-spinner" class="stream-status-spinner" style="width: 36px; height: 36px; border: 3px solid rgba(255,255,255,0.2); border-top-color: var(--accent-gold); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+            <div style="display: flex; flex-direction: column; gap: 6px; max-width: 340px;">
+              <span id="stream-status-text" style="font-size: 16px; font-weight: 600; color: #fff;">Connecting to live court camera...</span>
+              <span id="stream-status-subtext" style="font-size: 13px; color: var(--text-secondary); line-height: 1.4;"></span>
+            </div>
+            <button class="apple-btn apple-btn-primary" id="btn-stream-ended-hub" style="display: none; padding: 10px 22px; font-size: 14px; font-weight: 600; margin-top: 6px;">
+              Return to Hub
+            </button>
+          </div>
 
           <!-- Top-Left Live Score Overlay Container (Dual-Sport: Volleyball vs Tennis) -->
           <div id="watcher-score-container"></div>
 
           <!-- Top-Right Actions -->
           <div class="watcher-top-actions">
-            <button class="apple-btn frosted-glass" id="btn-simulate-cheer" style="font-size: 13px; font-weight: 600; padding: 8px 14px;" title="Simulate a new comment to test the pulsing drawer tab">
-              🔔 Test Cheer
-            </button>
             <button class="btn-exit-circle" id="btn-back-hub" title="Exit to Home" aria-label="Exit">
               ✕
             </button>
@@ -107,7 +116,7 @@ export function renderWatcherView(container, navigate) {
 
   // Viewer Name Storage
   function getViewerName() {
-    return localStorage.getItem('gamestreamer_viewer_name') || '';
+    return localStorage.getItem('gamestreamer_viewer_name') || 'Family Fan';
   }
 
   function setViewerName(name) {
@@ -118,51 +127,179 @@ export function renderWatcherView(container, navigate) {
   }
 
   function ensureViewerName() {
-    let name = getViewerName();
-    if (!name) {
-      const chosen = prompt('What is your name for the chat? (e.g. Grandma, Uncle Dave, Mom)', 'Grandma');
-      if (chosen && chosen.trim()) {
-        setViewerName(chosen.trim());
-        name = chosen.trim();
-      } else {
-        name = 'Family Member';
-        setViewerName(name);
+    return getViewerName();
+  }
+
+  function showNamePromptModal() {
+    const existing = document.getElementById('name-prompt-modal');
+    if (existing) existing.remove();
+
+    const backdrop = document.createElement('div');
+    backdrop.id = 'name-prompt-modal';
+    backdrop.className = 'highlight-pill-backdrop';
+    backdrop.style.display = 'flex';
+    backdrop.style.zIndex = '9999';
+
+    const currentName = getViewerName();
+    backdrop.innerHTML = `
+      <div class="highlight-pill-dialog frosted-glass" style="max-width: 340px; padding: 22px;">
+        <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 8px;">Your Chat Name</h3>
+        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 14px;">
+          Choose the name that appears when you post comments (e.g. Grandma, Uncle Dave, Mom):
+        </p>
+        <input type="text" id="input-custom-viewer-name" class="simple-input" value="${currentName}" style="padding: 10px 14px; font-size: 14px; margin-bottom: 16px;" />
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button class="apple-btn" id="btn-cancel-name" style="padding: 6px 14px;">Cancel</button>
+          <button class="apple-btn apple-btn-primary" id="btn-save-name" style="padding: 6px 16px;">Save</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(backdrop);
+    const input = backdrop.querySelector('#input-custom-viewer-name');
+    input.focus();
+    input.select();
+
+    const close = () => backdrop.remove();
+    backdrop.querySelector('#btn-cancel-name').onclick = close;
+    backdrop.querySelector('#btn-save-name').onclick = () => {
+      const val = input.value.trim();
+      if (val) setViewerName(val);
+      close();
+    };
+    input.onkeydown = (e) => {
+      if (e.key === 'Enter') {
+        const val = input.value.trim();
+        if (val) setViewerName(val);
+        close();
       }
-    }
-    return name;
+    };
   }
 
-  const initialName = getViewerName();
-  if (initialName) {
-    lblViewerName.textContent = initialName;
-  }
-
+  lblViewerName.textContent = getViewerName();
   btnEditViewerName.onclick = (e) => {
     e.stopPropagation();
-    const current = getViewerName() || 'Grandma';
-    const chosen = prompt('What is your name for the chat? (e.g. Grandma, Uncle Dave, Mom)', current);
-    if (chosen !== null && chosen.trim()) {
-      setViewerName(chosen.trim());
-    }
+    showNamePromptModal();
   };
 
-  const btnSimulateCheer = container.querySelector('#btn-simulate-cheer');
-  btnBackHub.onclick = () => navigate('/');
+  const livePlayer = container.querySelector('#live-player');
+  const streamStatusBadge = container.querySelector('#stream-status-badge');
+  const streamStatusIcon = container.querySelector('#stream-status-icon');
+  const streamStatusSpinner = container.querySelector('#stream-status-spinner');
+  const streamStatusText = container.querySelector('#stream-status-text');
+  const streamStatusSubtext = container.querySelector('#stream-status-subtext');
+  const btnStreamEndedHub = container.querySelector('#btn-stream-ended-hub');
 
-  const sampleCheers = [
-    { sender: 'Uncle Dave', text: 'What an awesome spike! 🔥' },
-    { sender: 'Grandma', text: 'Cheering from home! Let\'s go Wildcats! 🏐' },
-    { sender: 'Aunt Sarah', text: 'Incredible dig! Keep it up! 💪' },
-    { sender: 'Cousin Mike', text: 'Ace! That serve was untouchable! 🎯' }
-  ];
-  let cheerIndex = 0;
-  if (btnSimulateCheer) {
-    btnSimulateCheer.onclick = (e) => {
-      e.stopPropagation();
-      const cheer = sampleCheers[cheerIndex % sampleCheers.length];
-      cheerIndex++;
-      store.postChatMessage(cheer.sender, cheer.text);
+  if (btnStreamEndedHub) {
+    btnStreamEndedHub.onclick = () => {
+      webrtcService.leaveStream();
+      navigate('/');
     };
+  }
+
+  function setOverlayConnecting() {
+    if (!streamStatusBadge) return;
+    streamStatusBadge.style.display = 'flex';
+    if (streamStatusSpinner) streamStatusSpinner.style.display = 'block';
+    if (streamStatusIcon) streamStatusIcon.style.display = 'none';
+    if (streamStatusText) streamStatusText.textContent = 'Connecting to court camera...';
+    if (streamStatusSubtext) streamStatusSubtext.textContent = 'Waiting for live video feed from the court.';
+    if (btnStreamEndedHub) btnStreamEndedHub.style.display = 'none';
+  }
+
+  function setOverlayConnected() {
+    if (streamStatusBadge) streamStatusBadge.style.display = 'none';
+  }
+
+  function setOverlayReconnecting() {
+    if (!streamStatusBadge) return;
+    streamStatusBadge.style.display = 'flex';
+    if (streamStatusSpinner) streamStatusSpinner.style.display = 'block';
+    if (streamStatusIcon) streamStatusIcon.style.display = 'none';
+    if (streamStatusText) streamStatusText.textContent = 'Signal Dip — Reconnecting to Court...';
+    if (streamStatusSubtext) {
+      streamStatusSubtext.textContent = 'Temporary cellular signal fluctuation. Re-establishing connection...';
+    }
+  }
+
+  function setOverlayOfflineOrEnded(isFinished, winnerName, opponentName, isPaused = false) {
+    if (!streamStatusBadge) return;
+    streamStatusBadge.style.display = 'flex';
+    if (streamStatusSpinner) streamStatusSpinner.style.display = 'none';
+    if (streamStatusIcon) {
+      streamStatusIcon.style.display = 'block';
+      streamStatusIcon.textContent = isFinished ? '🏆' : (isPaused ? '⏸️' : '📹');
+    }
+    if (streamStatusText) {
+      streamStatusText.textContent = isFinished 
+        ? 'Match Broadcast Concluded' 
+        : (isPaused ? 'Match Paused (Set Break / Timeout)' : 'Court Broadcast Offline');
+    }
+    if (streamStatusSubtext) {
+      if (isFinished) {
+        const opp = (opponentName || 'Opponent').toUpperCase();
+        const win = winnerName === 'us' ? 'US' : (winnerName === 'them' ? opp : (winnerName || 'US'));
+        streamStatusSubtext.textContent = `Final: ${win} won the match! Full comment transcript and highlights are saved in the archive.`;
+      } else if (isPaused) {
+        streamStatusSubtext.textContent = 'The court broadcaster has paused between sets or during a timeout. The feed will resume shortly.';
+      } else {
+        streamStatusSubtext.textContent = 'The court camera is currently offline. Highlights and prior sets are available in the archive.';
+      }
+    }
+    if (btnStreamEndedHub) {
+      btnStreamEndedHub.style.display = 'inline-flex';
+    }
+  }
+
+  btnBackHub.onclick = () => {
+    webrtcService.leaveStream();
+    navigate('/');
+  };
+
+  // Reactive WebRTC connection manager
+  let joinedMatchId = null;
+
+  function ensureWebRTCConnection(m) {
+    if (m && m.id && m.isLive) {
+      if (joinedMatchId === m.id) return;
+      joinedMatchId = m.id;
+      setOverlayConnecting();
+      webrtcService.joinStream(
+        m.id,
+        (remoteStream) => {
+          console.log('[Watcher] Attaching remote stream to video element');
+          livePlayer.srcObject = remoteStream;
+          livePlayer.play().catch(e => {
+            console.log('[Watcher] Autoplay muted fallback:', e);
+            livePlayer.muted = true;
+            livePlayer.play().catch(() => {});
+          });
+          setOverlayConnected();
+        },
+        (status) => {
+          if (status === 'connected') {
+            setOverlayConnected();
+          } else if (status === 'connecting') {
+            setOverlayConnecting();
+          } else if (status === 'reconnecting') {
+            setOverlayReconnecting();
+          } else if (status === 'disconnected' || status === 'failed') {
+            const currentMatch = store.getState().activeMatch;
+            const isFin = !!(currentMatch && (currentMatch.isFinished || !currentMatch.isLive));
+            const isPaused = !!(currentMatch && currentMatch.isPaused);
+            setOverlayOfflineOrEnded(isFin, currentMatch?.winner, currentMatch?.opponent, isPaused);
+          }
+        }
+      );
+    } else {
+      if (joinedMatchId) {
+        webrtcService.leaveStream();
+        joinedMatchId = null;
+      }
+      const isFin = !!(m && m.isFinished);
+      const isPaused = !!(m && m.isPaused);
+      setOverlayOfflineOrEnded(isFin, m?.winner, m?.opponent, isPaused);
+    }
   }
 
   // --- Drawer Open / Close Logic ---
@@ -309,10 +446,13 @@ export function renderWatcherView(container, navigate) {
 
   // --- Real-time Updates from Store ---
   function update() {
-    const s = store.getState().activeMatch;
+    const s = store.getState().activeMatch || {};
+    ensureWebRTCConnection(s);
 
     if (watcherScoreContainer) {
-      if (s.sport === 'tennis') {
+      if (!s.isLive) {
+        watcherScoreContainer.innerHTML = '';
+      } else if (s.sport === 'tennis') {
         const ptDisplay = getTennisPointDisplay(s.pointsUs, s.pointsThem, s.isTiebreak, s.tennisScoringType);
         const pointsUsDisplay = ptDisplay.us;
         const pointsThemDisplay = ptDisplay.them;
@@ -397,6 +537,9 @@ export function renderWatcherView(container, navigate) {
       return text;
     }
 
+    const chatList = store.getState().chat || [];
+    const isDrawerOpen = chatDrawer ? chatDrawer.classList.contains('open') : false;
+
     drawerChatList.innerHTML = chatList.map(msg => `
       <div class="chat-bubble">
         <div class="sender">${msg.sender} ${msg.score ? `(Set ${msg.set} • ${msg.score})` : ''}</div>
@@ -423,10 +566,17 @@ export function renderWatcherView(container, navigate) {
     }
   }
 
+  const initialActiveMatch = store.getState().activeMatch;
+  if (initialActiveMatch && initialActiveMatch.id) {
+    store.initChatSync(initialActiveMatch.id);
+  }
+
   update();
   const unsubscribe = store.subscribe(update);
 
   return () => {
+    webrtcService.leaveStream();
+    joinedMatchId = null;
     if (speechRecognition) {
       try { speechRecognition.abort(); } catch (e) {}
     }

@@ -1,6 +1,18 @@
 // ==========================================================================
 // GameStreamer State Management & Realtime Sync Layer
+// Powered by Cloud Firestore & Local Fast Cache
 // ==========================================================================
+
+import { db } from './firebase.js';
+import {
+  collection,
+  doc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+  addDoc
+} from 'firebase/firestore';
 
 const STORAGE_KEY = 'gamestreamer_state_v1';
 
@@ -96,22 +108,22 @@ export function formatTennisSetScores(setScores = []) {
 // Initial state with realistic demo matches so the app is immediately beautiful and testable
 const DEFAULT_STATE = {
   activeMatch: {
-    id: 'demo-live',
+    id: null,
     sport: 'volleyball', // 'volleyball' or 'tennis'
     isLive: false,
-    isFinished: false,
+    isFinished: true,
     date: 'Today',
-    opponent: 'Lincoln High',
+    opponent: '',
     teamUs: 'US',
-    teamThem: 'LINCOLN',
+    teamThem: 'OPPONENT',
     courtSideUs: 'left', // 'left' or 'right'
-    scoreUs: 18,
-    scoreThem: 16,
-    setsUs: 1,
+    scoreUs: 0,
+    scoreThem: 0,
+    setsUs: 0,
     setsThem: 0,
-    currentSet: 2,
+    currentSet: 1,
     lastScoreTimestamp: Date.now(),
-    viewers: 1,
+    viewers: 0,
     // Tennis specific state
     gamesUs: 0,
     gamesThem: 0,
@@ -127,226 +139,24 @@ const DEFAULT_STATE = {
     setFinished: false,
     ringBufferDuration: 20
   },
-  matches: [
-    {
-      id: 'demo-live',
-      date: 'Today',
-      opponent: 'Lincoln High',
-      isLive: false,
-      isFinished: false,
-      isArchived: false,
-      setsUs: 1,
-      setsThem: 0,
-      currentSet: 2,
-      scoreUs: 18,
-      scoreThem: 16,
-      highlights: [
-        {
-          id: 'h_1',
-          type: 'player',
-          set: 1,
-          score: '14 - 12',
-          label: '🔥 Sweet Serve',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-          driveFileId: 'drive_h_1',
-          driveUrl: 'https://drive.google.com/file/d/drive_h_1/view',
-          fileSizeBytes: 3400000,
-          isUploading: false,
-          isStarred: true, // Starred by default so user sees gold star!
-          timestamp: Date.now() - 1800000
-        },
-        {
-          id: 'h_2',
-          type: 'team',
-          set: 1,
-          score: '24 - 23',
-          label: '💪 Big Block!',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-          driveFileId: 'drive_h_2',
-          driveUrl: 'https://drive.google.com/file/d/drive_h_2/view',
-          fileSizeBytes: 3500000,
-          isUploading: false,
-          isStarred: true, // Blue filled star for team highlight!
-          timestamp: Date.now() - 900000
-        },
-        {
-          id: 'h_3',
-          type: 'player',
-          set: 2,
-          score: '18 - 16',
-          label: '💣 Crazy Kill',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
-          driveFileId: 'drive_h_3',
-          driveUrl: 'https://drive.google.com/file/d/drive_h_3/view',
-          fileSizeBytes: 3300000,
-          isUploading: true, // Show the uploading state requested!
-          isStarred: false, // Gold outline for unstarred player highlight!
-          timestamp: Date.now() - 60000
-        }
-      ]
-    },
-    {
-      id: 'match-oct-18',
-      date: 'Oct 18, 2026',
-      opponent: 'West High',
-      isLive: false,
-      isFinished: true,
-      isArchived: false,
-      setsUs: 2,
-      setsThem: 1,
-      currentSet: 3,
-      scoreUs: 15,
-      scoreThem: 11,
-      highlights: [
-        {
-          id: 'h_w1',
-          type: 'player',
-          set: 1,
-          score: '19 - 17',
-          label: '🪏 Amazing Dig',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4',
-          driveFileId: 'drive_h_w1',
-          driveUrl: 'https://drive.google.com/file/d/drive_h_w1/view',
-          fileSizeBytes: 3400000,
-          isUploading: false,
-          isStarred: false,
-          timestamp: 1729267200000
-        },
-        {
-          id: 'h_w2',
-          type: 'team',
-          set: 3,
-          score: '14 - 11',
-          label: '🎯 Cool Set',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
-          driveFileId: 'drive_h_w2',
-          driveUrl: 'https://drive.google.com/file/d/drive_h_w2/view',
-          fileSizeBytes: 3600000,
-          isUploading: false,
-          isStarred: false,
-          timestamp: 1729269000000
-        }
-      ],
-      comments: [
-        { sender: 'Grandma', text: 'Let\'s go Wildcats! Looking good! 🏐' },
-        { sender: 'Game Streamer', text: '🏐 Set 1 Final: US 25 - 21 WEST HIGH', isCheer: true },
-        { sender: 'Game Streamer', text: '🏐 Set 2 Final: US 23 - 25 WEST HIGH', isCheer: true },
-        { sender: 'Game Streamer', text: '🏐 Set 3 Final: US 15 - 11 WEST HIGH', isCheer: true },
-        { sender: 'Uncle Dave', text: 'What a match! Huge win!' }
-      ]
-    },
-    {
-      id: 'match-oct-11',
-      date: 'Oct 11, 2026',
-      opponent: 'East High',
-      isLive: false,
-      isArchived: true, // Example of match already archived to Google Drive!
-      archivedAt: 1728700000000,
-      setsUs: 2,
-      setsThem: 0,
-      currentSet: 2,
-      scoreUs: 25,
-      scoreThem: 21,
-      highlights: [
-        {
-          id: 'h_e1',
-          set: 2,
-          score: '24 - 21',
-          label: 'Highlight',
-          videoUrl: null, // Server copy deleted to save cloud storage!
-          serverVideoDeleted: true,
-          driveFileId: 'drive_h_e1',
-          driveUrl: 'https://drive.google.com/file/d/drive_h_e1/view',
-          fileSizeBytes: 3400000,
-          isUploading: false,
-          timestamp: 1728662400000
-        }
-      ]
-    },
-    {
-      id: 'match-tennis-oct-19',
-      sport: 'tennis',
-      date: 'Oct 19, 2026',
-      opponent: 'St. Marks Academy',
-      teamUs: 'US',
-      teamThem: 'ST. MARKS',
-      isLive: false,
-      isFinished: true,
-      isArchived: false,
-      setsUs: 2,
-      setsThem: 1,
-      currentSet: 3,
-      currentSetFormat: 'tiebreak-10',
-      setScores: [
-        { set: 1, us: 6, them: 4, winner: 'us' },
-        { set: 2, us: 4, them: 6, winner: 'them' },
-        { set: 3, us: 10, them: 8, winner: 'us', isTiebreakOnly: true }
-      ],
-      highlights: [
-        {
-          id: 'h_t1',
-          type: 'player',
-          set: 1,
-          score: 'G:5-4 (40-30)',
-          label: '🔥 Sweet Serve',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-          driveFileId: 'drive_h_t1',
-          driveUrl: 'https://drive.google.com/file/d/drive_h_t1/view',
-          fileSizeBytes: 3500000,
-          isUploading: false,
-          isStarred: true,
-          timestamp: 1729353600000
-        },
-        {
-          id: 'h_t2',
-          type: 'team',
-          set: 2,
-          score: 'G:3-4 (30-40)',
-          label: '💪 Killer Forehand',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-          driveFileId: 'drive_h_t2',
-          driveUrl: 'https://drive.google.com/file/d/drive_h_t2/view',
-          fileSizeBytes: 3400000,
-          isUploading: false,
-          isStarred: false,
-          timestamp: 1729355400000
-        },
-        {
-          id: 'h_t3',
-          type: 'player',
-          set: 3,
-          score: 'TB:9-8',
-          label: '↩️ Blistering Return',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
-          driveFileId: 'drive_h_t3',
-          driveUrl: 'https://drive.google.com/file/d/drive_h_t3/view',
-          fileSizeBytes: 3600000,
-          isUploading: false,
-          isStarred: true,
-          timestamp: 1729357200000
-        }
-      ],
-      comments: [
-        { sender: 'Grandma', text: 'Watching the tennis match! Great forehands! 🎾' },
-        { sender: 'Game Streamer', text: '🎾 Set 1 Final: US 6 - 4 ST. MARKS (US wins Set 1)', isCheer: true },
-        { sender: 'Game Streamer', text: '🎾 Set 2 Final: US 4 - 6 ST. MARKS (ST. MARKS wins Set 2)', isCheer: true },
-        { sender: 'Game Streamer', text: '🏆 Tennis Match Final: US wins! (6-4, 4-6, [10-8])', isCheer: true }
-      ]
-    }
-  ],
-  chat: [
-    { id: 'c1', sender: 'Grandma', text: 'Watching from Ohio! Let\'s go Wildcats! 🏐', timestamp: Date.now() - 120000 },
-    { id: 'c2', sender: 'Aunt Sarah', text: 'Great defense! 💪', timestamp: Date.now() - 60000 }
-  ],
-  recentCheerPill: null
+  matches: [],
+  chat: [],
+  recentCheerPill: null,
+  driveFolderUrl: 'https://drive.google.com/drive/folders/1_xaGV5-7hA0-cm7TnTZtAbGvWL4AERxt?usp=sharing'
 };
 
 class GameStore {
   constructor() {
     this.listeners = new Set();
+    this.pointFinalizedListeners = new Set();
+    this.scoreActionListeners = new Set();
     this.state = this.loadState();
     this.pointBuffer = null;
+    this._isApplyingRemoteUpdate = false;
+    this._chatUnsub = null;
+    this._activeChatMatchId = null;
     this.initPointBuffers();
+    this.initFirestoreSync();
   }
 
   loadState() {
@@ -383,10 +193,10 @@ class GameStore {
             merged.activeMatch.setScores = [];
           }
 
-          // Ensure demo tennis match is available in archive
-          if (!merged.matches.some(m => m.id === 'match-tennis-oct-19')) {
-            const demoTennis = DEFAULT_STATE.matches.find(m => m.id === 'match-tennis-oct-19');
-            if (demoTennis) merged.matches.push(demoTennis);
+          // Clean out legacy demo mock matches from localStorage
+          merged.matches = (merged.matches || []).filter(m => !['demo-live', 'match-oct-18', 'match-tennis-oct-19'].includes(m.id));
+          if (merged.activeMatch && ['demo-live', 'match-oct-18', 'match-tennis-oct-19'].includes(merged.activeMatch.id)) {
+            merged.activeMatch.isLive = false;
           }
 
           // Ensure all matches and clips have archive, finished, drive & type properties, and sort highlights chronologically
@@ -402,8 +212,13 @@ class GameStore {
             for (const clip of (match.highlights || [])) {
               if (!clip.type) clip.type = 'player';
               if (!clip.fileSizeBytes) clip.fileSizeBytes = 3400000;
-              if (!clip.driveFileId) clip.driveFileId = 'drive_' + clip.id;
-              if (!clip.driveUrl) clip.driveUrl = `https://drive.google.com/file/d/${clip.driveFileId}/view`;
+              // Clean out old dummy drive_ ids so they do not falsely report as synced
+              if (clip.driveFileId && clip.driveFileId.startsWith('drive_')) {
+                clip.driveFileId = null;
+              }
+              if (!clip.videoUrl || clip.videoUrl.includes('commondatastorage.googleapis.com')) {
+                clip.videoUrl = '/videos/sample-highlight.mp4';
+              }
             }
           }
           return merged;
@@ -424,6 +239,265 @@ class GameStore {
       console.warn('Could not save state to localStorage:', e);
     }
     this.notify();
+    this.syncActiveMatchToFirestore();
+  }
+
+  getDeletedMatchIds() {
+    try {
+      const stored = localStorage.getItem('gamestreamer_deleted_match_ids');
+      return new Set(stored ? JSON.parse(stored) : []);
+    } catch (e) {
+      return new Set();
+    }
+  }
+
+  markMatchDeleted(matchId) {
+    if (!matchId) return;
+    try {
+      const set = this.getDeletedMatchIds();
+      set.add(matchId);
+      localStorage.setItem('gamestreamer_deleted_match_ids', JSON.stringify(Array.from(set)));
+    } catch (e) {}
+  }
+
+  syncActiveMatchToFirestore() {
+    const m = this.state.activeMatch;
+    // Sync active match to Firestore (handles live, paused, and finished state updates)
+    if (m && m.id && !this._isApplyingRemoteUpdate) {
+      try {
+        const docRef = doc(db, 'matches', m.id);
+        const matchEntry = this.state.matches.find(item => item.id === m.id);
+        const highlightsToSave = matchEntry && Array.isArray(matchEntry.highlights)
+          ? matchEntry.highlights.map(h => ({
+              id: h.id,
+              type: h.type || 'player',
+              set: h.set || 1,
+              score: h.score || '0 - 0',
+              label: h.label || 'Highlight',
+              videoUrl: h.videoUrl || '',
+              storageTier: h.storageTier || (h.serverVideoDeleted ? 'drive' : (h.driveFileId ? 'synced' : 'server')),
+              serverVideoDeleted: !!h.serverVideoDeleted,
+              hasLocalBlob: !!h.hasLocalBlob,
+              localBlobId: h.localBlobId || h.id,
+              durationMs: h.durationMs || null,
+              driveUrl: h.driveUrl || '',
+              driveFileId: h.driveFileId || '',
+              driveFolderUrl: h.driveFolderUrl || this.getDriveLocation(),
+              fileSizeBytes: h.fileSizeBytes || 3400000,
+              isStarred: !!h.isStarred,
+              timestamp: h.timestamp || Date.now()
+            }))
+          : [];
+        const commentsToSave = matchEntry && Array.isArray(matchEntry.comments)
+          ? matchEntry.comments
+          : (this.state.chat || []);
+
+        const dataToSave = {
+          id: m.id,
+          sport: m.sport || 'volleyball',
+          opponent: m.opponent || '',
+          teamUs: m.teamUs || 'US',
+          teamThem: m.teamThem || 'OPPONENT',
+          courtSideUs: m.courtSideUs || 'left',
+          isLive: !!m.isLive,
+          isFinished: !!m.isFinished,
+          isArchived: !!(matchEntry && matchEntry.isArchived),
+          storageTier: (matchEntry && matchEntry.storageTier) || (m.isArchived ? 'drive' : 'server'),
+          winner: m.winner || null,
+          date: m.date || 'Today',
+          scoreUs: m.scoreUs || 0,
+          scoreThem: m.scoreThem || 0,
+          setsUs: m.setsUs || 0,
+          setsThem: m.setsThem || 0,
+          currentSet: m.currentSet || 1,
+          gamesUs: m.gamesUs || 0,
+          gamesThem: m.gamesThem || 0,
+          pointsUs: m.pointsUs || 0,
+          pointsThem: m.pointsThem || 0,
+          server: m.server || 'us',
+          tennisScoringType: m.tennisScoringType || 'ad',
+          currentSetFormat: m.currentSetFormat || 'standard',
+          isTiebreak: !!m.isTiebreak,
+          tiebreakTarget: m.tiebreakTarget || 7,
+          setScores: m.setScores || [],
+          setFinished: !!m.setFinished,
+          highlights: highlightsToSave,
+          comments: commentsToSave,
+          lastScoreTimestamp: m.lastScoreTimestamp || Date.now(),
+          updatedAt: Date.now()
+        };
+        setDoc(docRef, dataToSave, { merge: true }).catch(err => {
+          console.warn('Failed to sync match to Firestore:', err);
+        });
+      } catch (err) {
+        console.warn('Firestore sync error:', err);
+      }
+    }
+  }
+
+  initFirestoreSync() {
+    try {
+      const matchesCol = collection(db, 'matches');
+      onSnapshot(matchesCol, (snapshot) => {
+        const firestoreMatches = [];
+        let mostRecentLiveMatch = null;
+
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          const matchObj = {
+            id: docSnap.id,
+            sport: 'volleyball',
+            date: 'Today',
+            opponent: '',
+            teamUs: 'US',
+            teamThem: 'OPPONENT',
+            courtSideUs: 'left',
+            isLive: false,
+            isFinished: true,
+            isArchived: false,
+            scoreUs: 0,
+            scoreThem: 0,
+            setsUs: 0,
+            setsThem: 0,
+            currentSet: 1,
+            gamesUs: 0,
+            gamesThem: 0,
+            pointsUs: 0,
+            pointsThem: 0,
+            highlights: [],
+            comments: [],
+            setScores: [],
+            ...data
+          };
+          matchObj.highlights = (Array.isArray(matchObj.highlights) ? sortHighlightsChronologically(matchObj.highlights) : []).map(h => {
+            const hasRealDriveId = !!(h.driveFileId && !h.driveFileId.startsWith('drive_'));
+            if (hasRealDriveId && (!h.videoUrl || h.videoUrl.includes('sample-highlight.mp4') || h.videoUrl.startsWith('blob:'))) {
+              return {
+                ...h,
+                videoUrl: `https://drive.google.com/uc?export=download&id=${h.driveFileId}`,
+                storageTier: 'synced',
+                cloudUploaded: true
+              };
+            }
+            if (!hasRealDriveId && h.driveFileId && h.driveFileId.startsWith('drive_')) {
+              // Strip fake dummy ID
+              h = { ...h, driveFileId: null };
+            }
+            if (!h.videoUrl || h.videoUrl.includes('commondatastorage.googleapis.com')) {
+              return { ...h, videoUrl: '/videos/sample-highlight.mp4' };
+            }
+            return h;
+          });
+
+          // Accurately set match-level storageTier
+          const allClipsSynced = matchObj.highlights.length > 0 && matchObj.highlights.every(h => {
+            const isRealDrive = !!(h.driveFileId && !h.driveFileId.startsWith('drive_'));
+            const isTier = h.storageTier === 'synced' || h.storageTier === 'drive';
+            const isDriveUrl = !!(h.driveUrl && h.driveUrl.includes('/d/') && !h.driveUrl.includes('folders/'));
+            return (isTier && isRealDrive) || isDriveUrl;
+          });
+          if (!matchObj.isArchived) {
+            matchObj.storageTier = allClipsSynced ? 'synced' : 'server';
+          }
+
+          matchObj.comments = Array.isArray(matchObj.comments) ? matchObj.comments : [];
+          matchObj.setScores = Array.isArray(matchObj.setScores) ? matchObj.setScores : [];
+          firestoreMatches.push(matchObj);
+          // Liveness verification: must be marked isLive AND have a heartbeat/update within the last 45 seconds!
+          const lastActive = matchObj.broadcasterHeartbeat || matchObj.updatedAt || 0;
+          const isRecentlyActive = (Date.now() - lastActive) < 45000;
+          if (matchObj.isLive && isRecentlyActive) {
+            if (!mostRecentLiveMatch || (matchObj.updatedAt || 0) > (mostRecentLiveMatch.updatedAt || 0)) {
+              mostRecentLiveMatch = matchObj;
+            }
+          } else if (matchObj.isLive && !isRecentlyActive) {
+            // Self-heal ghost match from phones that closed or lost battery
+            console.log(`[Store] Self-healing stale ghost match ${matchObj.id} (last active ${Math.round((Date.now() - lastActive)/1000)}s ago)`);
+            matchObj.isLive = false;
+            try {
+              updateDoc(doc(db, 'matches', matchObj.id), { isLive: false, broadcasterHeartbeat: 0 }).catch(() => {});
+            } catch (e) {}
+          }
+        });
+
+        // Filter out matches that were deleted locally
+        const deletedIds = this.getDeletedMatchIds();
+        const validFirestoreMatches = firestoreMatches.filter(m => !deletedIds.has(m.id));
+
+        // Merge: keep local matches that aren't deleted and haven't synced yet, 
+        // while updating all matches present in Firestore!
+        const matchMap = new Map();
+        validFirestoreMatches.forEach(m => matchMap.set(m.id, m));
+
+        (this.state.matches || []).forEach(localM => {
+          if (localM && localM.id && !deletedIds.has(localM.id) && !matchMap.has(localM.id)) {
+            matchMap.set(localM.id, localM);
+            try {
+              setDoc(doc(db, 'matches', localM.id), {
+                ...localM,
+                updatedAt: localM.updatedAt || Date.now()
+              }, { merge: true }).catch(() => {});
+            } catch (e) {}
+          }
+        });
+
+        const mergedMatches = Array.from(matchMap.values());
+        mergedMatches.sort((a, b) => (b.updatedAt || b.date || 0) - (a.updatedAt || a.date || 0));
+
+        this._isApplyingRemoteUpdate = true;
+        try {
+          const isBroadcasterOnStream = (typeof window !== 'undefined' && window.location && (window.location.pathname === '/stream' || (window.location.hash && window.location.hash.includes('stream'))));
+
+          if (!isBroadcasterOnStream) {
+            if (mostRecentLiveMatch) {
+              this.state.activeMatch = { ...mostRecentLiveMatch };
+              if (this._activeChatMatchId !== mostRecentLiveMatch.id) {
+                this.initChatSync(mostRecentLiveMatch.id);
+              }
+            } else {
+              if (this.state.activeMatch) {
+                this.state.activeMatch.isLive = false;
+              }
+            }
+          }
+
+          this.state.matches = mergedMatches;
+
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+          }
+          this.notify();
+        } finally {
+          this._isApplyingRemoteUpdate = false;
+        }
+      }, (err) => {
+        console.warn('Firestore matches sync error:', err);
+      });
+    } catch (e) {
+      console.warn('Could not initialize Firestore matches sync:', e);
+    }
+  }
+
+  initChatSync(matchId) {
+    if (this._chatUnsub) {
+      this._chatUnsub();
+      this._chatUnsub = null;
+    }
+    if (!matchId) return;
+    this._activeChatMatchId = matchId;
+
+    try {
+      const chatCol = collection(db, 'matches', matchId, 'chat');
+      this._chatUnsub = onSnapshot(chatCol, (snapshot) => {
+        const msgs = [];
+        snapshot.forEach(d => msgs.push({ id: d.id, ...d.data() }));
+        msgs.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+        this.state.chat = msgs;
+        this.notify();
+      });
+    } catch (e) {
+      console.warn('Could not init chat sync:', e);
+    }
   }
 
   subscribe(listener) {
@@ -431,9 +505,47 @@ class GameStore {
     return () => this.listeners.delete(listener);
   }
 
+  onPointFinalized(callback) {
+    if (!this.pointFinalizedListeners) this.pointFinalizedListeners = new Set();
+    this.pointFinalizedListeners.add(callback);
+    return () => this.pointFinalizedListeners.delete(callback);
+  }
+
+  notifyPointFinalized(pointMeta) {
+    if (!this.pointFinalizedListeners) return;
+    for (const cb of this.pointFinalizedListeners) {
+      try {
+        cb(pointMeta);
+      } catch (e) {
+        console.error('[GameStore] Error executing pointFinalized listener:', e);
+      }
+    }
+  }
+
+  onScoreActionOccurred(callback) {
+    if (!this.scoreActionListeners) this.scoreActionListeners = new Set();
+    this.scoreActionListeners.add(callback);
+    return () => this.scoreActionListeners.delete(callback);
+  }
+
+  notifyScoreAction(actionTimestamp) {
+    if (!this.scoreActionListeners) return;
+    for (const cb of this.scoreActionListeners) {
+      try {
+        cb(actionTimestamp);
+      } catch (e) {
+        console.error('[GameStore] Error executing scoreAction listener:', e);
+      }
+    }
+  }
+
   notify() {
     for (const listener of this.listeners) {
-      listener(this.state);
+      try {
+        listener(this.state);
+      } catch (err) {
+        console.error('[GameStore] Error executing state listener:', err);
+      }
     }
   }
 
@@ -519,7 +631,7 @@ class GameStore {
     return `${m.scoreUs} - ${m.scoreThem}`;
   }
 
-  // --- Point Ring-Buffer & 5-Second Grace Period Management ---
+  // --- Point Ring-Buffer & 3-Second Grace Period Management ---
 
   initPointBuffers() {
     const m = this.state.activeMatch || {};
@@ -539,34 +651,41 @@ class GameStore {
         pendingHighlight: null
       },
       previous: this.pointBuffer ? this.pointBuffer.previous : null,
-      graceTimer: null
+      graceTimer: null,
+      pendingClickTimestamp: null
     };
   }
 
-  // Called every time the score changes
+  // Called every time the score changes. Debounced by 3 seconds in case of rapid misclicks/corrections.
+  // When a string of clicks occurs with each click < 3s from the previous, only the last click is committed.
   onScoreAction(actionTimestamp = Date.now()) {
     if (!this.pointBuffer) this.initPointBuffers();
 
-    const m = this.state.activeMatch;
+    const finalScore = this.getScoreSummaryString();
     const cur = this.pointBuffer.current;
 
-    // Record the timestamp of this latest score update
-    cur.lastScoreActionTimestamp = actionTimestamp;
-    cur.scoreCurrent = this.getScoreSummaryString();
-
-    // Reset 5s grace period timer if running (handles rapid undos/corrections/catch-ups)
-    if (this.pointBuffer.graceTimer) {
-      clearTimeout(this.pointBuffer.graceTimer);
-      this.pointBuffer.graceTimer = null;
+    if (cur) {
+      cur.scoreCurrent = finalScore;
+      cur.lastScoreActionTimestamp = actionTimestamp;
     }
 
-    // 5-second grace period before accepting this time mark as the official highlight closure point
+    // Keep track of the most recent click timestamp in this string of rapid adjustments
+    this.pointBuffer.pendingClickTimestamp = actionTimestamp;
+
+    // Immediately notify subscribers (e.g. StreamerView) of the score click so buffering starts at this exact timestamp
+    this.notifyScoreAction(actionTimestamp);
+
+    // Reset 3-second debounce timer
+    if (this.pointBuffer.graceTimer) {
+      clearTimeout(this.pointBuffer.graceTimer);
+    }
+
     this.pointBuffer.graceTimer = setTimeout(() => {
       this.finalizePointBoundary();
-    }, 5000);
+    }, 3000);
   }
 
-  // Finalizes the current point buffer and rotates it to previousPoint
+  // Finalizes the current point buffer and rotates it to previousPoint after 3s of score inactivity
   finalizePointBoundary() {
     if (!this.pointBuffer) return;
     if (this.pointBuffer.graceTimer) {
@@ -576,18 +695,21 @@ class GameStore {
 
     const cur = this.pointBuffer.current;
     const m = this.state.activeMatch;
-    const endTime = cur.lastScoreActionTimestamp || Date.now();
-    const finalScore = this.getScoreSummaryString();
+    // Effective point boundary timestamp is the timestamp of the LAST click in the string
+    const endTime = this.pointBuffer.pendingClickTimestamp || (cur ? cur.lastScoreActionTimestamp : null) || Date.now();
+    this.pointBuffer.pendingClickTimestamp = null;
+    const finalScore = (cur && cur.scoreCurrent) ? cur.scoreCurrent : this.getScoreSummaryString();
+    const finalSet = m.currentSet || 1;
 
     const completedPoint = {
-      ...cur,
+      ...(cur || {}),
       endTime: endTime,
       finalScore: finalScore,
-      finalSet: m.currentSet
+      finalSet: finalSet
     };
 
     // If broadcaster highlighted "Current Pt." mid-point, finalize and save the clip now!
-    if (cur.pendingHighlight) {
+    if (cur && cur.pendingHighlight) {
       this.saveHighlightClip({
         type: cur.pendingHighlight.type,
         label: cur.pendingHighlight.label,
@@ -604,14 +726,17 @@ class GameStore {
 
     // Start fresh current point
     this.pointBuffer.current = {
-      id: 'pt_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
-      set: m.currentSet,
+      id: 'pt_' + endTime + '_' + Math.random().toString(36).substr(2, 6),
+      set: finalSet,
       scoreAtStart: finalScore,
       scoreCurrent: finalScore,
       startTime: endTime,
       lastScoreActionTimestamp: null,
       pendingHighlight: null
     };
+
+    // Notify listeners (StreamerView, etc.) that the point tick has officially committed
+    this.notifyPointFinalized(completedPoint);
   }
 
   // --- Broadcaster Score Controls ---
@@ -696,36 +821,14 @@ class GameStore {
         // Tiebreak won!
         if (m.currentSetFormat === 'tiebreak-10' || m.currentSetFormat === 'match_tiebreak_10' || m.currentSetFormat === 'tiebreak-7' || m.currentSetFormat === 'tiebreak_7') {
           // Tiebreak-only set (e.g. match tiebreak)
-          m.setScores = m.setScores || [];
-          m.setScores.push({
-            set: m.currentSet,
-            setNumber: m.currentSet,
-            us: m.pointsUs,
-            them: m.pointsThem,
-            score: `[${m.pointsUs}-${m.pointsThem}]`,
-            winner: isUs ? 'us' : 'them',
-            isTiebreakOnly: true
-          });
-          if (isUs) m.setsUs += 1;
-          else m.setsThem += 1;
+          this._recordSetOutcome(m.currentSet, m.pointsUs, m.pointsThem, isUs ? 'us' : 'them', true);
           m.setFinished = true;
         } else {
           // Set tiebreak at 6-6 (or 8-8)
           if (isUs) m.gamesUs += 1;
           else m.gamesThem += 1;
 
-          m.setScores = m.setScores || [];
-          m.setScores.push({
-            set: m.currentSet,
-            setNumber: m.currentSet,
-            us: m.gamesUs,
-            them: m.gamesThem,
-            score: `${m.gamesUs}-${m.gamesThem}`,
-            winner: isUs ? 'us' : 'them',
-            tiebreakScore: `${loserPts}`
-          });
-          if (isUs) m.setsUs += 1;
-          else m.setsThem += 1;
+          this._recordSetOutcome(m.currentSet, m.gamesUs, m.gamesThem, isUs ? 'us' : 'them', false, `${loserPts}`);
           m.setFinished = true;
         }
 
@@ -823,17 +926,7 @@ class GameStore {
           } else if ((m.gamesUs >= 6 || m.gamesThem >= 6) && Math.abs(m.gamesUs - m.gamesThem) >= 2) {
             // Set Won!
             const setWinner = m.gamesUs > m.gamesThem ? 'us' : 'them';
-            m.setScores = m.setScores || [];
-            m.setScores.push({
-              set: m.currentSet,
-              setNumber: m.currentSet,
-              us: m.gamesUs,
-              them: m.gamesThem,
-              score: `${m.gamesUs}-${m.gamesThem}`,
-              winner: setWinner
-            });
-            if (setWinner === 'us') m.setsUs += 1;
-            else m.setsThem += 1;
+            this._recordSetOutcome(m.currentSet, m.gamesUs, m.gamesThem, setWinner, false);
             m.setFinished = true;
 
             const winnerName = setWinner === 'us' ? 'US' : (m.opponent || 'OPPONENT').toUpperCase();
@@ -855,17 +948,7 @@ class GameStore {
             m.tiebreakInitialServer = m.server;
           } else if ((m.gamesUs >= 8 || m.gamesThem >= 8) && Math.abs(m.gamesUs - m.gamesThem) >= 2) {
             const setWinner = m.gamesUs > m.gamesThem ? 'us' : 'them';
-            m.setScores = m.setScores || [];
-            m.setScores.push({
-              set: m.currentSet,
-              setNumber: m.currentSet,
-              us: m.gamesUs,
-              them: m.gamesThem,
-              score: `${m.gamesUs}-${m.gamesThem}`,
-              winner: setWinner
-            });
-            if (setWinner === 'us') m.setsUs += 1;
-            else m.setsThem += 1;
+            this._recordSetOutcome(m.currentSet, m.gamesUs, m.gamesThem, setWinner, false);
             m.setFinished = true;
 
             const winnerName = setWinner === 'us' ? 'US' : (m.opponent || 'OPPONENT').toUpperCase();
@@ -906,20 +989,9 @@ class GameStore {
     if (!m.setFinished && (m.gamesUs > 0 || m.gamesThem > 0 || m.pointsUs > 0 || m.pointsThem > 0)) {
       const setWinner = m.gamesUs > m.gamesThem ? 'us' : (m.gamesThem > m.gamesUs ? 'them' : null);
       const wasTBOnly = (m.currentSetFormat === 'tiebreak-10' || m.currentSetFormat === 'match_tiebreak_10' || m.currentSetFormat === 'tiebreak-7' || m.currentSetFormat === 'tiebreak_7');
-      m.setScores = m.setScores || [];
       const finalUs = m.isTiebreak ? m.pointsUs : m.gamesUs;
       const finalThem = m.isTiebreak ? m.pointsThem : m.gamesThem;
-      m.setScores.push({
-        set: m.currentSet,
-        setNumber: m.currentSet,
-        us: finalUs,
-        them: finalThem,
-        score: wasTBOnly ? `[${finalUs}-${finalThem}]` : `${finalUs}-${finalThem}`,
-        winner: setWinner,
-        isTiebreakOnly: wasTBOnly
-      });
-      if (setWinner === 'us') m.setsUs += 1;
-      else if (setWinner === 'them') m.setsThem += 1;
+      this._recordSetOutcome(m.currentSet, finalUs, finalThem, setWinner, wasTBOnly);
     }
 
     const nextSetNum = (m.currentSet || 1) + 1;
@@ -1047,6 +1119,69 @@ class GameStore {
     this.saveState();
   }
 
+  _recordSetOutcome(setNum, usScore, themScore, winner, isTiebreakOnly = false, tiebreakScore = null) {
+    const m = this.state.activeMatch;
+    if (!m) return;
+    m.setScores = Array.isArray(m.setScores) ? m.setScores : [];
+    const targetSet = parseInt(setNum, 10) || 1;
+    const existingIdx = m.setScores.findIndex(s => s.set === targetSet || s.setNumber === targetSet);
+    const scoreStr = isTiebreakOnly ? `[${usScore}-${themScore}]` : `${usScore}-${themScore}`;
+    const entry = {
+      set: targetSet,
+      setNumber: targetSet,
+      us: usScore,
+      them: themScore,
+      score: scoreStr,
+      winner: winner || (usScore > themScore ? 'us' : (themScore > usScore ? 'them' : 'us')),
+      isTiebreakOnly: !!isTiebreakOnly,
+      ...(tiebreakScore ? { tiebreakScore } : {})
+    };
+    if (existingIdx >= 0) {
+      m.setScores[existingIdx] = entry;
+    } else {
+      m.setScores.push(entry);
+    }
+    // Always re-evaluate setsUs and setsThem strictly from setScores to prevent duplicate set counting
+    m.setsUs = m.setScores.filter(s => s.winner === 'us').length;
+    m.setsThem = m.setScores.filter(s => s.winner === 'them').length;
+    if (m.setsUs > m.setsThem) m.winner = 'us';
+    else if (m.setsThem > m.setsUs) m.winner = 'them';
+    else m.winner = entry.winner;
+  }
+
+  awardCurrentSet(winnerOverride = null) {
+    const m = this.state.activeMatch;
+    if (!m) return;
+    const isTennis = (m.sport === 'tennis');
+    const setNum = m.currentSet || 1;
+
+    if (isTennis) {
+      const isTiebreakOnly = (m.currentSetFormat === 'tiebreak-10' || m.currentSetFormat === 'match_tiebreak_10' || m.currentSetFormat === 'tiebreak-7' || m.currentSetFormat === 'tiebreak_7');
+      const scoreUs = isTiebreakOnly ? (m.pointsUs || 0) : (m.gamesUs || 0);
+      const scoreThem = isTiebreakOnly ? (m.pointsThem || 0) : (m.gamesThem || 0);
+      let setWin = winnerOverride;
+      if (!setWin) {
+        if (scoreUs > scoreThem) setWin = 'us';
+        else if (scoreThem > scoreUs) setWin = 'them';
+        else if (m.pointsUs > m.pointsThem) setWin = 'us';
+        else if (m.pointsThem > m.pointsUs) setWin = 'them';
+        else setWin = 'us';
+      }
+      this._recordSetOutcome(setNum, scoreUs, scoreThem, setWin, isTiebreakOnly);
+      m.setFinished = true;
+    } else {
+      const finalUs = m.scoreUs || 0;
+      const finalThem = m.scoreThem || 0;
+      let setWin = winnerOverride;
+      if (!setWin) {
+        if (finalUs > finalThem) setWin = 'us';
+        else if (finalThem > finalUs) setWin = 'them';
+        else setWin = 'us';
+      }
+      this._recordSetOutcome(setNum, finalUs, finalThem, setWin, false);
+    }
+  }
+
   advanceSet() {
     if (this.state.activeMatch.sport === 'tennis') {
       this.startNextTennisSet('standard');
@@ -1062,13 +1197,10 @@ class GameStore {
     const finalUs = m.scoreUs;
     const finalThem = m.scoreThem;
     const winnerName = (finalUs > finalThem) ? 'US' : m.teamThem;
+    const setWinner = (finalUs > finalThem) ? 'us' : (finalThem > finalUs ? 'them' : 'us');
 
-    // Award set to whoever has more points
-    if (finalUs > finalThem) {
-      m.setsUs += 1;
-    } else if (finalThem > finalUs) {
-      m.setsThem += 1;
-    }
+    // Record set outcome and recalculate setsUs / setsThem cleanly
+    this._recordSetOutcome(prevSet, finalUs, finalThem, setWinner, false);
 
     // Auto-post set score summary to chat so it is permanently logged
     this.state.chat.push({
@@ -1102,13 +1234,37 @@ class GameStore {
     return maxScore >= 25 && lead >= 2;
   }
 
-  // Pause broadcast (match still in progress, can be resumed)
+  // Pause/Stop broadcast (match still in progress, can be resumed)
   pauseBroadcast() {
     if (this.pointBuffer && this.pointBuffer.graceTimer) {
       this.finalizePointBoundary();
     }
-    this.state.activeMatch.isLive = false;
-    this.state.activeMatch.isFinished = false;
+    const m = this.state.activeMatch;
+    if (m) {
+      // Award the current set based upon current score
+      this.awardCurrentSet();
+
+      m.isLive = false;
+      m.isFinished = false;
+      if (m.id) {
+        try {
+          updateDoc(doc(db, 'matches', m.id), {
+            isLive: false,
+            isFinished: false,
+            winner: m.winner || null,
+            setsUs: m.setsUs || 0,
+            setsThem: m.setsThem || 0,
+            gamesUs: m.gamesUs || 0,
+            gamesThem: m.gamesThem || 0,
+            scoreUs: m.scoreUs || 0,
+            scoreThem: m.scoreThem || 0,
+            setScores: m.setScores || [],
+            setFinished: !!m.setFinished,
+            updatedAt: Date.now()
+          }).catch(() => {});
+        } catch (e) {}
+      }
+    }
     this.syncActiveMatchToArchive(false);
     this.saveState();
   }
@@ -1120,31 +1276,27 @@ class GameStore {
     }
 
     const m = this.state.activeMatch;
+
+    // If there was a pending highlight that wasn't finalized yet, save it now!
+    if (this.pointBuffer && this.pointBuffer.current && this.pointBuffer.current.pendingHighlight) {
+      const cur = this.pointBuffer.current;
+      this.saveHighlightClip({
+        type: cur.pendingHighlight.type,
+        label: cur.pendingHighlight.label,
+        set: m.currentSet,
+        score: `${m.scoreUs} - ${m.scoreThem}`,
+        videoBlobOrUrl: cur.pendingHighlight.videoBlobOrUrl,
+        timestamp: Date.now()
+      });
+      cur.pendingHighlight = null;
+    }
+
+    // Award current set based on current score
+    this.awardCurrentSet(winnerOverride);
+
     const isTennis = (m.sport === 'tennis');
-
     if (isTennis) {
-      // If current set had games/points and wasn't finalized
-      if (!m.setFinished && (m.gamesUs > 0 || m.gamesThem > 0 || m.pointsUs > 0 || m.pointsThem > 0)) {
-        let setWin = winnerOverride;
-        if (!setWin) {
-          if (m.gamesUs > m.gamesThem) setWin = 'us';
-          else if (m.gamesThem > m.gamesUs) setWin = 'them';
-          else if (m.pointsUs > m.pointsThem) setWin = 'us';
-          else if (m.pointsThem > m.pointsUs) setWin = 'them';
-        }
-        m.setScores = m.setScores || [];
-        m.setScores.push({
-          set: m.currentSet,
-          us: (m.currentSetFormat === 'tiebreak-10' || m.currentSetFormat === 'tiebreak-7') ? m.pointsUs : m.gamesUs,
-          them: (m.currentSetFormat === 'tiebreak-10' || m.currentSetFormat === 'tiebreak-7') ? m.pointsThem : m.gamesThem,
-          winner: setWin,
-          isTiebreakOnly: (m.currentSetFormat === 'tiebreak-10' || m.currentSetFormat === 'tiebreak-7')
-        });
-        if (setWin === 'us') m.setsUs += 1;
-        else if (setWin === 'them') m.setsThem += 1;
-      }
-
-      let matchWinner = winnerOverride;
+      let matchWinner = winnerOverride || m.winner;
       if (!matchWinner) {
         if (m.setsUs > m.setsThem) matchWinner = 'us';
         else if (m.setsThem > m.setsUs) matchWinner = 'them';
@@ -1154,51 +1306,38 @@ class GameStore {
       const winnerName = matchWinner === 'us' ? 'US' : (m.opponent || 'OPPONENT').toUpperCase();
       const scoreStr = formatTennisSetScores(m.setScores);
 
-      this.state.chat.push({
-        id: 'match_final_' + Date.now(),
-        sender: 'Game Streamer',
-        text: `🏆 Tennis Match Final: ${winnerName} wins! ${scoreStr ? `(${scoreStr})` : ''}`,
-        timestamp: Date.now(),
+      this.postChatMessage('Game Streamer', `🏆 Tennis Match Final: ${winnerName} wins! ${scoreStr ? `(${scoreStr})` : ''}`, {
         isCheer: true
       });
     } else {
-      const prevSet = m.currentSet;
-      const finalUs = m.scoreUs;
-      const finalThem = m.scoreThem;
-
-      // If points were scored in this set, award the set and log it
-      if (finalUs > 0 || finalThem > 0) {
-        if (finalUs > finalThem) {
-          m.setsUs += 1;
-        } else if (finalThem > finalUs) {
-          m.setsThem += 1;
-        }
-
-        this.state.chat.push({
-          id: 'set_summary_' + Date.now(),
-          sender: 'Game Streamer',
-          text: `🏐 Set ${prevSet} Final: US ${finalUs} - ${finalThem} ${m.teamThem}`,
-          set: prevSet,
-          score: `${finalUs} - ${finalThem}`,
-          timestamp: Date.now(),
-          isCheer: true
-        });
-      }
-
-      // Post final match milestone to chat
       const matchWinner = winnerOverride ? (winnerOverride === 'us' ? 'US' : m.teamThem) : (m.setsUs > m.setsThem ? 'US' : m.teamThem);
       m.winner = winnerOverride || (m.setsUs > m.setsThem ? 'us' : 'them');
-      this.state.chat.push({
-        id: 'match_final_' + Date.now(),
-        sender: 'Game Streamer',
-        text: `🏆 Match Final: US won ${m.setsUs} set${m.setsUs === 1 ? '' : 's'}, ${m.teamThem} won ${m.setsThem} set${m.setsThem === 1 ? '' : 's'} (${matchWinner} wins match)`,
-        timestamp: Date.now(),
+      this.postChatMessage('Game Streamer', `🏆 Match Final: US won ${m.setsUs} set${m.setsUs === 1 ? '' : 's'}, ${m.teamThem} won ${m.setsThem} set${m.setsThem === 1 ? '' : 's'} (${matchWinner} wins match)`, {
         isCheer: true
       });
     }
 
     m.isLive = false;
     m.isFinished = true;
+
+    if (m.id) {
+      try {
+        updateDoc(doc(db, 'matches', m.id), {
+          isLive: false,
+          isFinished: true,
+          winner: m.winner || null,
+          setsUs: m.setsUs || 0,
+          setsThem: m.setsThem || 0,
+          gamesUs: m.gamesUs || 0,
+          gamesThem: m.gamesThem || 0,
+          scoreUs: m.scoreUs || 0,
+          scoreThem: m.scoreThem || 0,
+          setScores: m.setScores || [],
+          setFinished: !!m.setFinished,
+          updatedAt: Date.now()
+        }).catch(() => {});
+      } catch (e) {}
+    }
 
     // Save complete comment transcript and outcome with the match in archive
     const matchEntry = this.syncActiveMatchToArchive(true);
@@ -1211,83 +1350,69 @@ class GameStore {
   // --- Highlights Engine with Player vs Team & Current vs Previous Point ---
 
   // Trigger point highlight (current or previous point, player or team)
-  triggerPointHighlight({ type = 'player', label = 'Highlight', target = 'current', videoBlobOrUrl = null }) {
+  triggerPointHighlight({ type = 'player', label = 'Highlight', target = 'current', videoBlobOrUrl = null, rallyInfo = null }) {
     if (!this.pointBuffer) this.initPointBuffers();
 
     const m = this.state.activeMatch;
+    let set = m.currentSet || 1;
+    let score = this.getScoreSummaryString() || `${m.scoreUs} - ${m.scoreThem}`;
+    let timestamp = Date.now();
 
-    if (target === 'previous') {
+    if (rallyInfo && rallyInfo.score) {
+      score = rallyInfo.score;
+      set = rallyInfo.set || set;
+      timestamp = rallyInfo.timestamp || timestamp;
+    } else if ((target === 'last' || target === 'previous') && this.pointBuffer && this.pointBuffer.previous) {
       const prev = this.pointBuffer.previous;
-      if (prev) {
-        return this.saveHighlightClip({
-          type,
-          label,
-          set: prev.finalSet || prev.set || m.currentSet,
-          score: prev.finalScore || prev.scoreCurrent || `${m.scoreUs} - ${m.scoreThem}`,
-          videoBlobOrUrl,
-          timestamp: prev.endTime || Date.now()
-        });
-      } else {
-        // Fallback if no previous point exists yet (first rally of match)
-        return this.saveHighlightClip({
-          type,
-          label,
-          set: m.currentSet,
-          score: `${m.scoreUs} - ${m.scoreThem}`,
-          videoBlobOrUrl,
-          timestamp: Date.now()
-        });
-      }
-    } else {
-      // Current point highlight:
-      const cur = this.pointBuffer.current;
-      cur.pendingHighlight = {
-        type,
-        label,
-        videoBlobOrUrl,
-        requestedAt: Date.now()
-      };
-
-      // Auto-post highlight event to chat so viewers see it immediately
-      this.state.chat.push({
-        id: 'c_' + Date.now(),
-        sender: 'Broadcaster',
-        text: `⚡ ${type === 'player' ? 'Player' : 'Team'} Highlight: ${label}`,
-        set: m.currentSet,
-        score: `${m.scoreUs} - ${m.scoreThem}`,
-        timestamp: Date.now(),
-        isCheer: true
-      });
-      this.saveState();
-      this.triggerHaptic('double');
-
-      return {
-        isPending: true,
-        type,
-        label,
-        target: 'current'
-      };
+      set = prev.finalSet || prev.set || set;
+      score = prev.finalScore || prev.scoreCurrent || score;
+      timestamp = prev.endTime || timestamp;
     }
+
+    // Auto-post highlight event to chat so viewers see it immediately
+    this.postChatMessage('Broadcaster', `⚡ ${type === 'player' ? 'Player' : 'Team'} Highlight: ${label}`, {
+      isCheer: true,
+      set: set,
+      score: score
+    });
+    this.triggerHaptic('double');
+
+    // Immediately and permanently save the highlight clip to archive & Firestore
+    return this.saveHighlightClip({
+      type,
+      label,
+      set,
+      score,
+      videoBlobOrUrl,
+      timestamp,
+      durationMs: rallyInfo ? rallyInfo.durationMs : null
+    });
   }
 
   // Save highlight clip to match archive
-  saveHighlightClip({ type = 'player', label = 'Highlight', set = 1, score = '0 - 0', videoBlobOrUrl = null, timestamp = Date.now() }) {
+  saveHighlightClip({ type = 'player', label = 'Highlight', set = 1, score = '0 - 0', videoBlobOrUrl = null, timestamp = Date.now(), durationMs = null }) {
     const m = this.state.activeMatch;
     const clipId = 'h_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
-    const driveId = 'drive_' + clipId;
     const driveFolderUrl = this.getDriveLocation();
+    const isBlob = !!(videoBlobOrUrl && videoBlobOrUrl.startsWith('blob:'));
     const newClip = {
       id: clipId,
       type: type, // 'player' or 'team'
       set: set,
       score: score,
       label: label,
-      videoUrl: videoBlobOrUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-      driveFileId: driveId,
-      driveUrl: `https://drive.google.com/file/d/${driveId}/view`,
+      videoUrl: videoBlobOrUrl || '/videos/sample-highlight.mp4',
+      storageTier: 'server', // Server copy until confirmed synced to Google Drive
+      serverVideoDeleted: false,
+      hasLocalBlob: isBlob,
+      localBlobId: clipId,
+      driveFileId: null, // Null until verified upload to Drive
+      driveUrl: null,
       driveFolderUrl: driveFolderUrl,
+      cloudUploaded: false,
+      durationMs: durationMs,
       fileSizeBytes: 3400000,
-      isUploading: true,
+      isUploading: false,
       isStarred: false,
       timestamp: timestamp
     };
@@ -1306,23 +1431,12 @@ class GameStore {
     // Auto-post to chat if not already queued
     const alreadyPosted = this.state.chat.some(c => c.text && c.text.includes(label) && Date.now() - c.timestamp < 6000);
     if (!alreadyPosted) {
-      this.state.chat.push({
-        id: 'c_' + Date.now(),
-        sender: 'Broadcaster',
-        text: `⚡ ${type === 'player' ? 'Player' : 'Team'} Highlight: ${label}`,
+      this.postChatMessage('Broadcaster', `⚡ ${type === 'player' ? 'Player' : 'Team'} Highlight: ${label}`, {
+        isCheer: true,
         set: set,
-        score: score,
-        timestamp: Date.now(),
-        isCheer: true
+        score: score
       });
-      this.saveState();
     }
-
-    // Simulate background throttled upload finishing after 4 seconds
-    setTimeout(() => {
-      newClip.isUploading = false;
-      this.saveState();
-    }, 4000);
 
     return newClip;
   }
@@ -1357,37 +1471,55 @@ class GameStore {
 
   postCheerPill(pillText) {
     const m = this.state.activeMatch;
-    const cheerObj = {
-      id: 'c_' + Date.now(),
-      sender: 'Broadcaster',
-      text: pillText,
-      set: m.currentSet,
-      score: `${m.scoreUs} - ${m.scoreThem}`,
-      timestamp: Date.now(),
-      isCheer: true
-    };
-    this.state.recentCheerPill = cheerObj;
-    this.state.chat.push(cheerObj);
+    this.postChatMessage('Broadcaster', pillText, {
+      isCheer: true,
+      set: m?.currentSet || 1,
+      score: `${m?.scoreUs || 0} - ${m?.scoreThem || 0}`
+    });
     this.triggerHaptic('light');
-    this.saveState();
+
+    const lastMsg = this.state.chat[this.state.chat.length - 1];
+    this.state.recentCheerPill = lastMsg;
 
     // Auto-clear recentCheerPill after 20s if no highlight was pressed
     setTimeout(() => {
-      if (this.state.recentCheerPill === cheerObj) {
+      if (this.state.recentCheerPill === lastMsg) {
         this.state.recentCheerPill = null;
       }
     }, 20000);
   }
 
-  postChatMessage(sender, text) {
+  postChatMessage(sender, text, options = {}) {
     if (!text || !text.trim()) return;
-    this.state.chat.push({
-      id: 'c_' + Date.now(),
+    const m = this.state.activeMatch;
+    const msg = {
+      id: 'c_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
       sender: sender || 'Viewer',
       text: text.trim(),
-      timestamp: Date.now()
-    });
+      timestamp: Date.now(),
+      isCheer: !!options.isCheer,
+      set: options.set !== undefined ? options.set : (m?.currentSet || 1),
+      score: options.score !== undefined ? options.score : `${m?.scoreUs || 0} - ${m?.scoreThem || 0}`
+    };
+    this.state.chat.push(msg);
     this.saveState();
+
+    if (m && m.id) {
+      try {
+        addDoc(collection(db, 'matches', m.id, 'chat'), {
+          sender: msg.sender,
+          text: msg.text,
+          timestamp: msg.timestamp,
+          isCheer: msg.isCheer,
+          set: msg.set,
+          score: msg.score
+        }).catch(err => {
+          console.warn('Error saving chat message to Firestore:', err);
+        });
+      } catch (err) {
+        console.warn('Firestore chat error:', err);
+      }
+    }
   }
 
   // --- Streamer Lifecycle ---
@@ -1395,6 +1527,17 @@ class GameStore {
   resumeMatch(matchId) {
     const match = this.state.matches.find(m => m.id === matchId);
     if (!match) return;
+
+    // Ensure all other matches are marked isLive: false, isFinished: true
+    this.state.matches.forEach(m => {
+      if (m.id !== matchId && (m.isLive || !m.isFinished)) {
+        m.isLive = false;
+        m.isFinished = true;
+        try {
+          updateDoc(doc(db, 'matches', m.id), { isLive: false, isFinished: true, updatedAt: Date.now() }).catch(() => {});
+        } catch (e) {}
+      }
+    });
 
     const sport = match.sport || 'volleyball';
     this.state.activeMatch = {
@@ -1426,11 +1569,19 @@ class GameStore {
       setFinished: !!match.setFinished,
       ringBufferDuration: match.ringBufferDuration || (sport === 'tennis' ? 30 : 20),
       lastScoreTimestamp: Date.now(),
-      viewers: 1
+      viewers: 0
     };
     match.isLive = true;
     match.isFinished = false;
+    try {
+      updateDoc(doc(db, 'matches', match.id), {
+        isLive: true,
+        isFinished: false,
+        updatedAt: Date.now()
+      }).catch(() => {});
+    } catch (e) {}
     this.initPointBuffers();
+    this.initChatSync(matchId);
     this.saveState();
   }
 
@@ -1439,6 +1590,17 @@ class GameStore {
       this.resumeMatch(options.resumeMatchId);
       return;
     }
+
+    // Ensure all other matches are marked isLive: false, isFinished: true in local state and Firestore!
+    this.state.matches.forEach(m => {
+      if (m.isLive || !m.isFinished) {
+        m.isLive = false;
+        m.isFinished = true;
+        try {
+          updateDoc(doc(db, 'matches', m.id), { isLive: false, isFinished: true, updatedAt: Date.now() }).catch(() => {});
+        } catch (e) {}
+      }
+    });
 
     const oppUpper = (opponentName || 'OPPONENT').toUpperCase();
     const newMatchId = 'match_' + Date.now();
@@ -1455,6 +1617,30 @@ class GameStore {
       }
     } catch (e) {}
 
+    let finalSetScores = options.setScores ? [...options.setScores] : [];
+    if (sport !== 'tennis' && startingSet > 1 && finalSetScores.length === 0) {
+      let uLeft = setsUs;
+      let tLeft = setsThem;
+      for (let sIdx = 1; sIdx < startingSet; sIdx++) {
+        let win = 'us';
+        if (uLeft > 0) {
+          win = 'us';
+          uLeft--;
+        } else if (tLeft > 0) {
+          win = 'them';
+          tLeft--;
+        }
+        finalSetScores.push({
+          set: sIdx,
+          setNumber: sIdx,
+          us: win === 'us' ? 25 : 20,
+          them: win === 'them' ? 25 : 20,
+          score: win === 'us' ? '25-20' : '20-25',
+          winner: win
+        });
+      }
+    }
+
     const tennisState = {
       gamesUs: Math.max(0, parseInt(options.gamesUs, 10) || 0),
       gamesThem: Math.max(0, parseInt(options.gamesThem, 10) || 0),
@@ -1466,7 +1652,7 @@ class GameStore {
       isTiebreak: options.currentSetFormat === 'tiebreak-10' || options.currentSetFormat === 'tiebreak-7' || !!options.isTiebreak,
       tiebreakTarget: options.currentSetFormat === 'tiebreak-10' ? 10 : 7,
       tiebreakInitialServer: options.server || 'us',
-      setScores: options.setScores ? [...options.setScores] : [],
+      setScores: finalSetScores,
       setFinished: false
     };
 
@@ -1486,7 +1672,7 @@ class GameStore {
       setsThem: setsThem,
       currentSet: startingSet,
       lastScoreTimestamp: Date.now(),
-      viewers: 1,
+      viewers: 0,
       ringBufferDuration: ringBufferDuration,
       ...(sport === 'tennis' ? tennisState : {
         gamesUs: 0,
@@ -1498,7 +1684,7 @@ class GameStore {
         currentSetFormat: 'standard',
         isTiebreak: false,
         tiebreakTarget: 7,
-        setScores: [],
+        setScores: finalSetScores,
         setFinished: false
       })
     };
@@ -1519,11 +1705,13 @@ class GameStore {
       scoreUs: 0,
       scoreThem: 0,
       ringBufferDuration: ringBufferDuration,
+      setScores: finalSetScores,
       ...(sport === 'tennis' ? tennisState : {}),
       highlights: []
     });
 
     this.initPointBuffers();
+    this.initChatSync(newMatchId);
     this.saveState();
   }
 
@@ -1543,7 +1731,7 @@ class GameStore {
       setsThem: 0,
       currentSet: 2,
       lastScoreTimestamp: Date.now(),
-      viewers: 3
+      viewers: 0
     };
     const demo = this.state.matches.find(m => m.id === 'demo-live');
     if (demo) {
@@ -1556,6 +1744,19 @@ class GameStore {
 
   stopBroadcast() {
     this.pauseBroadcast();
+  }
+
+  updateViewerCount(count) {
+    const m = this.state.activeMatch;
+    if (!m) return;
+    const viewers = Math.max(0, parseInt(count, 10) || 0);
+    m.viewers = viewers;
+    if (m.id) {
+      try {
+        updateDoc(doc(db, 'matches', m.id), { viewers, updatedAt: Date.now() }).catch(() => {});
+      } catch (e) {}
+    }
+    this.saveState();
   }
 
   // --- Server Storage & Google Drive Archiving ---
@@ -1603,44 +1804,134 @@ class GameStore {
     };
   }
 
-  archiveMatch(matchId) {
+  // --- 3-Stage Storage Lifecycle (Server Only -> Server + Drive -> Drive Only) ---
+
+  backupMatchToDrive(matchId) {
     const match = this.state.matches.find(m => m.id === matchId);
-    if (!match || match.isArchived) return 0;
+    if (!match) return false;
+
+    match.backedUpToDriveAt = Date.now();
+    const driveFolderUrl = this.getDriveLocation();
+
+    // Only mark clip as synced if it has a genuine Drive File ID
+    const allSynced = (match.highlights || []).length > 0 && (match.highlights || []).every(clip => {
+      const isRealDrive = !!(clip.driveFileId && !clip.driveFileId.startsWith('drive_'));
+      const isTier = clip.storageTier === 'synced' || clip.storageTier === 'drive';
+      const isDriveUrl = !!(clip.driveUrl && clip.driveUrl.includes('/d/') && !clip.driveUrl.includes('folders/'));
+      return (isTier && isRealDrive) || isDriveUrl;
+    });
+
+    if (allSynced) {
+      match.storageTier = 'synced';
+    }
+
+    try {
+      updateDoc(doc(db, 'matches', matchId), {
+        storageTier: match.storageTier || 'server',
+        backedUpToDriveAt: match.backedUpToDriveAt,
+        highlights: match.highlights,
+        updatedAt: Date.now()
+      }).catch(() => {});
+    } catch (e) {}
+
+    this.triggerHaptic('medium');
+    this.saveState();
+    return allSynced;
+  }
+
+  // Updates cloud sync & Drive details for a specific highlight clip
+  updateClipCloudDetails(matchId, clipId, details) {
+    const match = this.state.matches.find(m => m.id === matchId);
+    if (match) {
+      const clip = (match.highlights || []).find(h => h.id === clipId);
+      if (clip) {
+        Object.assign(clip, details);
+      }
+    }
+    if (this.state.activeMatch && this.state.activeMatch.id === matchId) {
+      const activeClip = (this.state.activeMatch.highlights || []).find(h => h.id === clipId);
+      if (activeClip) {
+        Object.assign(activeClip, details);
+      }
+    }
+    this.saveState();
+    this.notify();
+  }
+
+  // Stage 2 -> Stage 3: Purges server video copy to reclaim cloud hosting quota (relies on Drive)
+  purgeServerMatchStorage(matchId) {
+    const match = this.state.matches.find(m => m.id === matchId);
+    if (!match) return 0;
 
     let freedBytes = 0;
+    match.storageTier = 'drive';
     match.isArchived = true;
     match.archivedAt = Date.now();
+    const driveFolderUrl = this.getDriveLocation();
 
     for (const clip of (match.highlights || [])) {
       if (clip.videoUrl) {
         freedBytes += clip.fileSizeBytes || 3400000;
       }
+      clip.storageTier = 'drive';
       clip.serverVideoDeleted = true;
       clip.videoUrl = null; // Server copy purged to reclaim cloud space
       clip.driveFileId = clip.driveFileId || ('drive_' + clip.id);
-      clip.driveUrl = clip.driveUrl || `https://drive.google.com/file/d/${clip.driveFileId}/view`;
+      clip.driveUrl = clip.driveUrl || driveFolderUrl;
+      clip.driveFolderUrl = driveFolderUrl;
     }
 
-    this.triggerHaptic('medium');
+    try {
+      updateDoc(doc(db, 'matches', matchId), {
+        storageTier: 'drive',
+        isArchived: true,
+        archivedAt: match.archivedAt,
+        highlights: match.highlights,
+        updatedAt: Date.now()
+      }).catch(() => {});
+    } catch (e) {}
+
+    this.triggerHaptic('heavy');
     this.saveState();
     return freedBytes;
   }
 
-  unarchiveMatch(matchId) {
+  // Stage 3 -> Stage 2: Re-caches video copy onto app server
+  restoreMatchToServer(matchId) {
     const match = this.state.matches.find(m => m.id === matchId);
-    if (!match || !match.isArchived) return;
+    if (!match) return;
 
+    match.storageTier = 'synced';
     match.isArchived = false;
     match.archivedAt = null;
 
-    // Restore server video reference
     for (const clip of (match.highlights || [])) {
+      clip.storageTier = 'synced';
       clip.serverVideoDeleted = false;
-      clip.videoUrl = clip.videoUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+      clip.videoUrl = clip.videoUrl || '/videos/sample-highlight.mp4';
     }
+
+    try {
+      updateDoc(doc(db, 'matches', matchId), {
+        storageTier: 'synced',
+        isArchived: false,
+        archivedAt: null,
+        highlights: match.highlights,
+        updatedAt: Date.now()
+      }).catch(() => {});
+    } catch (e) {}
 
     this.triggerHaptic('light');
     this.saveState();
+  }
+
+  // Backwards compatibility aliases
+  archiveMatch(matchId) {
+    return this.purgeServerMatchStorage(matchId);
+  }
+
+  unarchiveMatch(matchId) {
+    return this.restoreMatchToServer(matchId);
   }
 
   // --- Google Drive Persistent Location & Safe Fallback ---
@@ -1657,8 +1948,8 @@ class GameStore {
         }
       }
     } catch (e) {}
-    // Guaranteed default location so highlights always have a backup target
-    return 'https://drive.google.com/drive/my-drive';
+    // Target Google Drive shared folder provided by user
+    return 'https://drive.google.com/drive/folders/1_xaGV5-7hA0-cm7TnTZtAbGvWL4AERxt?usp=sharing';
   }
 
   setDriveLocation(url) {
@@ -1705,21 +1996,33 @@ class GameStore {
 
   // --- Broadcaster-Only Complete Match Deletion ---
   deleteMatch(matchId) {
+    this.markMatchDeleted(matchId);
     const matchIndex = this.state.matches.findIndex(m => m.id === matchId);
-    if (matchIndex === -1) return false;
-
-    const [deletedMatch] = this.state.matches.splice(matchIndex, 1);
+    if (matchIndex !== -1) {
+      const [deletedMatch] = this.state.matches.splice(matchIndex, 1);
+      // Revoke any blob URLs for clips in this match to reclaim memory
+      if (deletedMatch && deletedMatch.highlights) {
+        for (const clip of deletedMatch.highlights) {
+          if (clip.videoUrl && clip.videoUrl.startsWith('blob:')) {
+            try {
+              URL.revokeObjectURL(clip.videoUrl);
+            } catch (e) {}
+          }
+        }
+      }
+    }
 
     // If activeMatch matches the deleted match, reset active broadcast state safely
     if (this.state.activeMatch && this.state.activeMatch.id === matchId) {
       this.state.activeMatch = {
-        id: 'match_' + Date.now(),
+        id: null,
+        sport: 'volleyball',
         isLive: false,
         isFinished: true,
         date: 'Today',
-        opponent: 'Opponent',
+        opponent: '',
         teamUs: 'US',
-        teamThem: 'THEM',
+        teamThem: 'OPPONENT',
         courtSideUs: 'left',
         scoreUs: 0,
         scoreThem: 0,
@@ -1729,25 +2032,21 @@ class GameStore {
         lastScoreTimestamp: Date.now(),
         viewers: 0,
         highlights: [],
-        comments: []
+        comments: [],
+        setScores: []
       };
       this.activePointClips = [];
       this.previousPointClips = [];
       this.midPointWaitState = null;
     }
 
-    // Revoke any blob URLs for clips in this match to reclaim memory
-    if (deletedMatch && deletedMatch.highlights) {
-      for (const clip of deletedMatch.highlights) {
-        if (clip.videoUrl && clip.videoUrl.startsWith('blob:')) {
-          try {
-            URL.revokeObjectURL(clip.videoUrl);
-          } catch (e) {}
-        }
-      }
-    }
+    // Permanently delete from Firestore!
+    try {
+      deleteDoc(doc(db, 'matches', matchId)).catch(err => {
+        console.warn('Failed to delete match from Firestore:', err);
+      });
+    } catch (e) {}
 
-    this.triggerHaptic('medium');
     this.saveState();
     return true;
   }

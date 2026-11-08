@@ -5,6 +5,9 @@
 
 import { store, getTennisPointDisplay } from '../services/store.js';
 import { getBroadcastIcon, getTennisNetIcon } from './icons.js';
+import { webrtcService } from '../services/webrtc.js';
+import { saveLocalClipBlob, uploadHighlightToFirebaseStorage, onSyncStatusChanged, triggerAutoSyncSweep } from '../services/mediaStorage.js';
+import { sanitizeVideoBlob } from '../services/drive.js';
 
 export function renderStreamerView(container, navigate) {
   let mediaStream = null;
@@ -39,6 +42,9 @@ export function renderStreamerView(container, navigate) {
           </div>
           <button class="apple-btn" id="btn-end-stream" style="padding: 6px 12px; font-size: 12px;">✕ End</button>
         </div>
+
+        <!-- Minimalist Unsynced Videos Indicator: Only the number of unsynced videos, pulses when syncing -->
+        <div id="sync-status-pill" class="sync-unsynced-badge idle" title="0 unsynced">0</div>
 
         <button class="apple-btn frosted-glass tabular-nums" id="btn-set-counter" style="font-weight: 700; font-size: 14px;">
           SET 1
@@ -174,7 +180,7 @@ export function renderStreamerView(container, navigate) {
               <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;" id="highlight-target-hint">Rally currently in play</div>
             </div>
             <button class="apple-btn btn-point-target-toggle current" id="btn-toggle-point-target">
-              Current Pt.
+              Current Point
             </button>
           </div>
 
@@ -325,28 +331,18 @@ export function renderStreamerView(container, navigate) {
         </div>
       </div>
 
-      <!-- Exit Broadcast Modal (Pause Broadcast vs Finish Match) -->
+      <!-- Stop Broadcast Confirmation Modal -->
       <div class="highlight-pill-backdrop" id="exit-broadcast-modal" style="display: none;">
-        <div class="highlight-pill-dialog" style="max-width: 330px;">
-          <div style="display: flex; align-items: center; justify-content: space-between;">
-            <h3 style="font-size: 16px; font-weight: 700;">Leave Broadcast</h3>
-            <button class="apple-btn" id="btn-cancel-exit-modal" style="padding: 4px 10px; font-size: 12px;">✕</button>
-          </div>
-          <p style="font-size: 13px; color: var(--text-secondary); margin: 6px 0 14px 0;">
-            Would you like to pause and keep this match in progress, or finalize the match score?
-          </p>
+        <div class="highlight-pill-dialog" style="max-width: 300px; text-align: center;">
+          <h3 style="font-size: 18px; font-weight: 700; margin: 0 0 10px 0; color: #fff;">Stop Broadcast</h3>
+          <p style="font-size: 14px; color: var(--text-secondary); margin: 0 0 20px 0;">Are you sure?</p>
 
-          <div style="display: flex; flex-direction: column; gap: 8px;">
-            <button class="apple-btn apple-btn-primary" id="btn-pause-stream" style="padding: 12px; font-size: 14px; font-weight: 600; text-align: left; display: flex; flex-direction: column; gap: 2px;">
-              <span>⏸ Pause Broadcast</span>
-              <span style="font-size: 11px; font-weight: 400; opacity: 0.85;">Keeps match in progress. You can resume and append highlights later today.</span>
+          <div style="display: flex; gap: 10px; justify-content: center;">
+            <button class="apple-btn" id="btn-cancel-exit-modal" style="flex: 1; padding: 10px 14px; font-size: 14px;">
+              Cancel
             </button>
-            <button class="apple-btn apple-btn-danger" id="btn-finish-stream" style="padding: 12px; font-size: 14px; font-weight: 600; text-align: left; display: flex; flex-direction: column; gap: 2px;">
-              <span>🏆 Finish Match</span>
-              <span style="font-size: 11px; font-weight: 400; opacity: 0.85;">Awards current set, finalizes match score and archives transcript.</span>
-            </button>
-            <button class="apple-btn" id="btn-cancel-exit-action" style="padding: 10px; font-size: 13px; margin-top: 4px;">
-              Cancel (Stay in Broadcast)
+            <button class="apple-btn apple-btn-danger" id="btn-confirm-stop-broadcast" style="flex: 1; padding: 10px 14px; font-size: 14px; font-weight: 600;">
+              Yes
             </button>
           </div>
         </div>
@@ -429,10 +425,8 @@ export function renderStreamerView(container, navigate) {
 
   // Exit broadcast modal elements
   const exitModal = container.querySelector('#exit-broadcast-modal');
-  const btnPauseStream = container.querySelector('#btn-pause-stream');
-  const btnFinishStream = container.querySelector('#btn-finish-stream');
+  const btnConfirmStop = container.querySelector('#btn-confirm-stop-broadcast');
   const btnCancelExitModal = container.querySelector('#btn-cancel-exit-modal');
-  const btnCancelExitAction = container.querySelector('#btn-cancel-exit-action');
 
   // Chat drawer elements
   const chatEdgeTab = container.querySelector('#chat-edge-tab');
@@ -460,6 +454,341 @@ export function renderStreamerView(container, navigate) {
   let hardwareZoomSupported = false;
   let currentHardwareZoom = 1.0;
 
+  // --- 3-Buffer Rotating Architecture (Buffer A, Buffer B, Buffer C) ---
+  // Zero chunk splicing: every rally is recorded continuously by its own single MediaRecorder.
+  // 90-second true rolling ring buffer: preserves Chunk 0 (ftyp+moov container header)
+  // while overwriting the oldest media fragments once 90s is reached.
+  const BUFFER_SLOT_IDS = ['A', 'B', 'C'];
+  const buffers = {
+    A: { id: 'A', recorder: null, chunks: [], startTime: 0, status: 'idle', pendingHighlights: [], meta: {} },
+    B: { id: 'B', recorder: null, chunks: [], startTime: 0, status: 'idle', pendingHighlights: [], meta: {} },
+    C: { id: 'C', recorder: null, chunks: [], startTime: 0, status: 'idle', pendingHighlights: [], meta: {} }
+  };
+  let activeSlotId = 'A';
+  let tentativeSlotId = null;
+  let activeMediaStream = null;
+  let pendingFinalizePromise = null;
+  const RALLY_SAFETY_MAX_MS = 90000; // 90s max per rally buffer (true rolling ring buffer)
+  const TIMESLICE_MS = 250; // 250ms chunks for smooth accumulation
+  const MAX_CHUNKS_90S = Math.floor(RALLY_SAFETY_MAX_MS / TIMESLICE_MS); // ~360 chunks
+
+  // Two discrete buffers for completed points with full metadata:
+  // lastCompletedRally: the rally between the most recent point click and the one previous point click
+  // previousRally: the rally prior to lastCompletedRally
+  let lastCompletedRally = null;
+  let previousRally = null;
+
+  function getBestSupportedVideoMime() {
+    if (typeof MediaRecorder === 'undefined') return '';
+    const types = [
+      'video/mp4;codecs=avc1',
+      'video/mp4',
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm;codecs=vp8',
+      'video/webm'
+    ];
+    for (const t of types) {
+      if (MediaRecorder.isTypeSupported(t)) {
+        return t;
+      }
+    }
+    return '';
+  }
+
+  function getNextSlotId(currentId) {
+    if (currentId === 'A') return 'B';
+    if (currentId === 'B') return 'C';
+    return 'A';
+  }
+
+  // Starts recording in a specific buffer slot with its own continuous MediaRecorder
+  function startSlotRecorder(slotId, startTime = Date.now(), initialStatus = 'active') {
+    if (!activeMediaStream || typeof MediaRecorder === 'undefined') return;
+    const slot = buffers[slotId];
+    if (!slot) return;
+
+    // Stop any existing recorder on this slot cleanly
+    if (slot.recorder) {
+      slot.recorder.ondataavailable = null;
+      slot.recorder.onstop = null;
+      try {
+        if (slot.recorder.state !== 'inactive') slot.recorder.stop();
+      } catch (e) {}
+      slot.recorder = null;
+    }
+
+    slot.chunks = [];
+    slot.startTime = startTime;
+    slot.status = initialStatus;
+    slot.pendingHighlights = [];
+    const m = store.getState().activeMatch || {};
+    slot.meta = {
+      set: m.currentSet || 1,
+      scoreAtStart: store.getScoreSummaryString() || '0 - 0'
+    };
+
+    const mimeType = getBestSupportedVideoMime();
+    try {
+      const recorderOptions = {
+        videoBitsPerSecond: 1800000 // 1.8 Mbps: Crisp 720p HD, ~3-4 MB files tuned for modest gym cellular uplink
+      };
+      if (mimeType) recorderOptions.mimeType = mimeType;
+      slot.recorder = new MediaRecorder(activeMediaStream, recorderOptions);
+
+      slot.recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          slot.chunks.push(e.data);
+          // True rolling 90s ring-buffer:
+          // Chunk 0 contains ftyp + moov (MP4 initialization segment).
+          // When chunks exceed 90 seconds (~360 chunks), splice out the oldest media chunk (index 1),
+          // keeping chunk 0 intact so the file container header is never lost!
+          if (slot.chunks.length > MAX_CHUNKS_90S) {
+            slot.chunks.splice(1, 1);
+          }
+        }
+      };
+
+      slot.recorder.start(TIMESLICE_MS);
+      console.log(`[StreamerView] ⏺️ Buffer ${slotId} started (${initialStatus}) at ${startTime} (90s rolling ring-buffer, timeslice ${TIMESLICE_MS}ms)`);
+    } catch (err) {
+      console.warn(`[StreamerView] Failed to start recorder for Buffer ${slotId}:`, err);
+    }
+  }
+
+  // Starts the initial buffer at match start or stream start
+  function startInitialBuffer() {
+    BUFFER_SLOT_IDS.forEach(id => {
+      const s = buffers[id];
+      if (s.recorder) {
+        s.recorder.ondataavailable = null;
+        s.recorder.onstop = null;
+        try { if (s.recorder.state !== 'inactive') s.recorder.stop(); } catch (e) {}
+        s.recorder = null;
+      }
+      s.chunks = [];
+      s.status = 'idle';
+      s.pendingHighlights = [];
+    });
+
+    activeSlotId = 'A';
+    tentativeSlotId = null;
+    startSlotRecorder('A', Date.now(), 'active');
+  }
+
+  // Called IMMEDIATELY when the user clicks score (+1 / -1) at actionTimestamp (e.g. t=17s).
+  // Spins up the tentative buffer immediately so the upcoming point's buffer begins AT THE CLICK!
+  // The active buffer continues uninterrupted until the 3-second debounce expires or is committed.
+  function handleScoreAction(actionTimestamp = Date.now()) {
+    if (!activeMediaStream || typeof MediaRecorder === 'undefined') return;
+
+    // If a tentative buffer is already running from an earlier click in a rapid cluster (< 3s apart),
+    // restart the tentative buffer cleanly at the LAST click timestamp:
+    if (tentativeSlotId) {
+      console.log(`[StreamerView] Rapid score click detected within 3s debounce. Restarting tentative Buffer ${tentativeSlotId} at ${actionTimestamp}...`);
+      startSlotRecorder(tentativeSlotId, actionTimestamp, 'tentative');
+      return;
+    }
+
+    // Otherwise, select the next slot in rotation: A -> B -> C -> A
+    const nextId = getNextSlotId(activeSlotId);
+    tentativeSlotId = nextId;
+    console.log(`[StreamerView] 🚀 Score clicked at ${actionTimestamp}. Starting tentative Buffer ${tentativeSlotId} while active Buffer ${activeSlotId} continues.`);
+    startSlotRecorder(tentativeSlotId, actionTimestamp, 'tentative');
+  }
+
+  // Finalizes the current point rally upon official commitment of point tick (after 3s debounce)
+  function finalizeRallySegment(set, score, endTime) {
+    pendingFinalizePromise = new Promise((resolve) => {
+      const outgoingId = activeSlotId;
+      const outgoingSlot = buffers[outgoingId];
+      const mimeType = outgoingSlot?.recorder?.mimeType || getBestSupportedVideoMime() || 'video/mp4';
+      const effectiveEndTime = endTime || Date.now();
+      const actualDurationMs = effectiveEndTime - (outgoingSlot ? outgoingSlot.startTime : Date.now());
+
+      if (!outgoingSlot || !outgoingSlot.recorder || outgoingSlot.recorder.state !== 'recording') {
+        promoteTentativeBuffer();
+        pendingFinalizePromise = null;
+        return resolve(lastCompletedRally);
+      }
+
+      outgoingSlot.status = 'finalizing';
+      const rec = outgoingSlot.recorder;
+
+      rec.onstop = async () => {
+        rec.ondataavailable = null;
+        rec.onstop = null;
+        outgoingSlot.recorder = null;
+
+        if (outgoingSlot.chunks.length > 0) {
+          let blob = new Blob(outgoingSlot.chunks, { type: mimeType });
+          blob = await sanitizeVideoBlob(blob);
+          const rallyMeta = {
+            blob,
+            set: set || outgoingSlot.meta?.set || 1,
+            score: score || outgoingSlot.meta?.scoreAtStart || '0 - 0',
+            timestamp: effectiveEndTime,
+            durationMs: Math.max(actualDurationMs, 1000),
+            startTime: outgoingSlot.startTime
+          };
+
+          if (lastCompletedRally) {
+            previousRally = lastCompletedRally;
+          }
+          lastCompletedRally = rallyMeta;
+          console.log(`[StreamerView] ✓ Completed rally finalized in Buffer ${outgoingId} (${(rallyMeta.durationMs/1000).toFixed(1)}s, ${rallyMeta.score}, ${blob.size} bytes). Single recorder, zero splicing!`);
+
+          // If this rally had pending highlights bookmarked, export them now!
+          if (outgoingSlot.pendingHighlights && outgoingSlot.pendingHighlights.length > 0) {
+            for (const pending of outgoingSlot.pendingHighlights) {
+              exportFinalizedHighlight(pending, rallyMeta);
+            }
+            outgoingSlot.pendingHighlights = [];
+          }
+        }
+
+        outgoingSlot.chunks = [];
+        outgoingSlot.status = 'idle';
+
+        promoteTentativeBuffer();
+        pendingFinalizePromise = null;
+        resolve(lastCompletedRally);
+      };
+
+      try {
+        rec.stop();
+      } catch (e) {
+        outgoingSlot.status = 'idle';
+        outgoingSlot.recorder = null;
+        promoteTentativeBuffer();
+        pendingFinalizePromise = null;
+        resolve(lastCompletedRally);
+      }
+    });
+
+    return pendingFinalizePromise;
+  }
+
+  // Promotes tentative slot to become activeSlotId cleanly
+  function promoteTentativeBuffer() {
+    if (tentativeSlotId && buffers[tentativeSlotId] && buffers[tentativeSlotId].recorder && buffers[tentativeSlotId].recorder.state === 'recording') {
+      const promotedId = tentativeSlotId;
+      buffers[promotedId].status = 'active';
+      activeSlotId = promotedId;
+      tentativeSlotId = null;
+      console.log(`[StreamerView] ✓ Buffer ${activeSlotId} is now officially started & active! Already has ${buffers[activeSlotId].chunks.length} chunks from score click.`);
+    } else {
+      // If no tentative slot was running (e.g. initial start or edge case), start next slot fresh as active
+      const nextId = getNextSlotId(activeSlotId);
+      activeSlotId = nextId;
+      tentativeSlotId = null;
+      startSlotRecorder(activeSlotId, Date.now(), 'active');
+    }
+  }
+
+  // Exports and uploads a finalized highlight clip from a completed rally
+  async function exportFinalizedHighlight(pending, rallyMeta) {
+    if (!rallyMeta || !rallyMeta.blob) return;
+    const videoBlob = rallyMeta.blob;
+    const videoBlobUrl = URL.createObjectURL(videoBlob);
+    const newClip = store.triggerPointHighlight({
+      type: pending.type,
+      label: pending.label,
+      target: pending.target || 'current',
+      videoBlobOrUrl: videoBlobUrl,
+      rallyInfo: rallyMeta
+    });
+
+    if (newClip && newClip.id && videoBlob) {
+      const activeMatch = store.getState().activeMatch || {};
+      await saveLocalClipBlob(newClip.id, videoBlob, {
+        matchId: activeMatch.id,
+        opponent: activeMatch.opponent,
+        matchDate: activeMatch.date,
+        set: newClip.set,
+        score: newClip.score,
+        label: newClip.label,
+        comment: newClip.comment || newClip.label,
+        durationMs: rallyMeta ? rallyMeta.durationMs : null
+      });
+      if (activeMatch && activeMatch.id) {
+        uploadHighlightToFirebaseStorage(activeMatch.id, newClip.id, videoBlob, {
+          matchDate: activeMatch.date,
+          opponent: activeMatch.opponent,
+          set: newClip.set,
+          score: newClip.score,
+          label: newClip.label,
+          comment: newClip.comment || newClip.label
+        });
+      }
+      console.log(`[StreamerView] 🎬 Exported highlight "${pending.label}" for point (${rallyMeta.score}, ${(rallyMeta.durationMs/1000).toFixed(1)}s, ${videoBlob.size} bytes).`);
+    }
+  }
+
+  // Bookmarks current point highlight on active buffer: buffer rolls uninterrupted until point ends
+  function bookmarkCurrentPointHighlight({ type = 'player', label = 'Highlight' }) {
+    const activeSlot = buffers[activeSlotId];
+    if (!activeSlot) return;
+
+    const m = store.getState().activeMatch || {};
+    const pendingItem = {
+      id: 'ph_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+      type,
+      label,
+      target: 'current',
+      clickTimestamp: Date.now(),
+      set: m.currentSet || 1,
+      score: store.getScoreSummaryString() || '0 - 0'
+    };
+    activeSlot.pendingHighlights.push(pendingItem);
+    console.log(`[StreamerView] 🔖 Bookmarked highlight "${label}" on active Buffer ${activeSlotId} (Score: ${pendingItem.score}). Buffer continues rolling uninterrupted. Clip will export when point finishes.`);
+
+    // Auto-post cheer to chat so viewers and broadcaster immediately see acknowledgment
+    store.postChatMessage('Broadcaster', `⚡ ${type === 'player' ? 'Player' : 'Team'} Highlight Bookmarked: ${label}`, {
+      isCheer: true,
+      set: pendingItem.set,
+      score: pendingItem.score
+    });
+    store.triggerHaptic('double');
+  }
+
+  function startHighlightRecorder(stream) {
+    activeMediaStream = stream;
+    startInitialBuffer();
+  }
+
+  async function captureHighlightBlob(target = 'current') {
+    // 1. If user selected LAST point (or previous):
+    // "between the most recent point click and the one previous point click"
+    if (target === 'last' || target === 'previous') {
+      // If a score click is currently pending in the 3s debounce, flush and commit it now
+      if (tentativeSlotId || (store.pointBuffer && store.pointBuffer.graceTimer)) {
+        store.finalizePointBoundary();
+      }
+      if (pendingFinalizePromise) {
+        await pendingFinalizePromise;
+      }
+      if (lastCompletedRally && lastCompletedRally.blob && lastCompletedRally.blob.size > 0) {
+        console.log(`[StreamerView] Tagging last point (${lastCompletedRally.score}, ${(lastCompletedRally.durationMs/1000).toFixed(1)}s, ${lastCompletedRally.blob.size} bytes). Active recorders NOT interrupted.`);
+        return lastCompletedRally;
+      }
+      if (previousRally && previousRally.blob && previousRally.blob.size > 0) {
+        console.log(`[StreamerView] Fallback to previous point (${previousRally.score}, ${previousRally.blob.size} bytes).`);
+        return previousRally;
+      }
+      // If at start of game (0-0), no completed point exists yet; commit active buffer so 0-0 rally is captured!
+      console.log('[StreamerView] No completed rally exists yet (e.g. at 0-0); finalizing current buffer to produce last completed rally.');
+      const m = store.getState().activeMatch || {};
+      const score = store.getScoreSummaryString() || '0 - 0';
+      await finalizeRallySegment(m.currentSet || 1, score, Date.now());
+      return lastCompletedRally;
+    }
+
+    // 2. If user selected CURRENT point:
+    // With the new architecture, current point is bookmarked and exports when the point finishes.
+    return null;
+  }
+
   // --- 1. Camera Initialization & Wake Lock ---
   async function initCamera() {
     try {
@@ -470,6 +799,19 @@ export function renderStreamerView(container, navigate) {
       videoElem.srcObject = mediaStream;
       videoElem.style.display = 'block';
       canvasElem.style.display = 'none';
+
+      startHighlightRecorder(mediaStream);
+
+      // Start WebRTC live stream broadcast for remote family viewers
+      const currentActiveMatch = store.getState().activeMatch;
+      if (currentActiveMatch && currentActiveMatch.id) {
+        webrtcService.startBroadcast(currentActiveMatch.id, mediaStream, (activeCount) => {
+          store.updateViewerCount(activeCount);
+          if (txtViewerCount) {
+            txtViewerCount.textContent = `(${activeCount})`;
+          }
+        });
+      }
 
       // Detect hardware optical/digital zoom capabilities on device camera
       try {
@@ -497,6 +839,12 @@ export function renderStreamerView(container, navigate) {
       startSimulatedVolleyballCourt(canvasElem);
       videoElem.style.display = 'none';
       canvasElem.style.display = 'block';
+      if (typeof canvasElem.captureStream === 'function') {
+        try {
+          const simStream = canvasElem.captureStream(25);
+          startHighlightRecorder(simStream);
+        } catch (e) {}
+      }
     }
 
     try {
@@ -689,10 +1037,14 @@ export function renderStreamerView(container, navigate) {
   };
 
   // --- 2. Update UI from Store ---
+  let lastRecordedScoreKey = '';
   function updateUI() {
     const s = store.getState().activeMatch;
     const isVictory = store.checkSetVictory();
     const isTennis = (s.sport === 'tennis');
+
+    const currentScoreKey = `${s.currentSet}:${s.scoreUs}-${s.scoreThem}:${s.gamesUs}-${s.gamesThem}:${s.pointsUs}-${s.pointsThem}`;
+    lastRecordedScoreKey = currentScoreKey;
 
     if (isVictory) {
       btnSet.classList.add('pulse-victory');
@@ -917,16 +1269,16 @@ export function renderStreamerView(container, navigate) {
   function handleFinishMatch() {
     const cur = store.getState().activeMatch;
     let winner = null;
-    const teamThem = (cur.opponent || 'OPPONENT').toUpperCase();
-    const hasUnknown = (cur.setScores || []).some(s => s.us === '?' || s.them === '?');
-    if (cur.sport === 'tennis' && (hasUnknown || !cur.setFinished)) {
-      const choice = confirm(`Finish Match:\n\nDid US win this match?\n\n[OK] = US Won\n[Cancel] = ${teamThem} Won`);
-      winner = choice ? 'us' : 'them';
+    if (cur && cur.sport === 'tennis') {
+      if (cur.gamesUs > cur.gamesThem) winner = 'us';
+      else if (cur.gamesThem > cur.gamesUs) winner = 'them';
+      else if (cur.setsUs > cur.setsThem) winner = 'us';
+      else if (cur.setsThem > cur.setsUs) winner = 'them';
+      else winner = 'us';
     }
     store.finishMatch(winner);
-    setActionModal.style.display = 'none';
-    exitModal.style.display = 'none';
-    cleanup();
+    if (setActionModal) setActionModal.style.display = 'none';
+    if (exitModal) exitModal.style.display = 'none';
     navigate('/');
   }
 
@@ -956,22 +1308,15 @@ export function renderStreamerView(container, navigate) {
     exitModal.style.display = 'flex';
   };
 
-  btnPauseStream.onclick = (e) => {
+  btnConfirmStop.onclick = (e) => {
     e.stopPropagation();
-    store.pauseBroadcast();
-    exitModal.style.display = 'none';
-    cleanup();
+    store.stopBroadcast();
+    if (exitModal) exitModal.style.display = 'none';
     navigate('/');
-  };
-
-  btnFinishStream.onclick = (e) => {
-    e.stopPropagation();
-    handleFinishMatch();
   };
 
   const closeExitModal = () => { exitModal.style.display = 'none'; };
   btnCancelExitModal.onclick = closeExitModal;
-  btnCancelExitAction.onclick = closeExitModal;
   exitModal.onclick = (e) => {
     if (e.target === exitModal) closeExitModal();
   };
@@ -1291,15 +1636,15 @@ export function renderStreamerView(container, navigate) {
 
   // Helper to visually toggle point target colors & keep button size constant
   function updatePointTargetUI(target) {
-    highlightPointTarget = target;
-    if (target === 'previous') {
-      btnTogglePointTarget.textContent = 'Previous Pt.';
+    highlightPointTarget = (target === 'last' || target === 'previous') ? 'last' : 'current';
+    if (highlightPointTarget === 'last') {
+      btnTogglePointTarget.textContent = 'Last Point';
       btnTogglePointTarget.className = 'apple-btn btn-point-target-toggle previous';
-      highlightTargetHint.textContent = 'Prior rally (footage of previous point)';
+      highlightTargetHint.textContent = 'Just completed rally (between last two point clicks)';
     } else {
-      btnTogglePointTarget.textContent = 'Current Pt.';
+      btnTogglePointTarget.textContent = 'Current Point';
       btnTogglePointTarget.className = 'apple-btn btn-point-target-toggle current';
-      highlightTargetHint.textContent = 'Rally currently in play (saves once point finishes)';
+      highlightTargetHint.textContent = 'Rally in play (exports when point completes)';
     }
   }
 
@@ -1327,28 +1672,79 @@ export function renderStreamerView(container, navigate) {
     `).join('');
 
     highlightPillGrid.querySelectorAll('.btn-highlight-select').forEach(btn => {
-      btn.onclick = (e) => {
+      btn.onclick = async (e) => {
         e.stopPropagation();
         const label = btn.dataset.label;
         const target = highlightPointTarget;
         const type = chosenHighlightType;
 
-        store.triggerPointHighlight({
-          type: type,
-          label: label,
-          target: target
-        });
-
         highlightModal.style.display = 'none';
 
-        const confirmText = (target === 'previous') ? 'Prev. Pt. Highlighted' : 'Current Pt. Highlighted';
         const originalText = (type === 'player') ? 'Player ★' : 'Team ★';
 
+        if (target === 'current') {
+          // Bookmark current point: does NOT stop or interrupt buffer!
+          bookmarkCurrentPointHighlight({ type, label });
+          if (activeTriggerBtn) {
+            activeTriggerBtn.style.transform = 'scale(1.08)';
+            activeTriggerBtn.textContent = '✓ Current Pt. Bookmarked';
+            flashHint(hintLeft, `${type.toUpperCase()}: ${label} (Bookmarked)`, type === 'player' ? 'gold' : 'blue');
+            setTimeout(() => {
+              activeTriggerBtn.style.transform = 'scale(1)';
+              activeTriggerBtn.textContent = originalText;
+            }, 2400);
+          }
+          return;
+        }
+
+        // Target is 'last' (or 'previous'):
         if (activeTriggerBtn) {
           activeTriggerBtn.style.transform = 'scale(1.08)';
-          activeTriggerBtn.textContent = `✓ ${confirmText}`;
+          activeTriggerBtn.textContent = `⏳ Saving...`;
           flashHint(hintLeft, `${type.toUpperCase()}: ${label}`, type === 'player' ? 'gold' : 'blue');
+        }
 
+        const rallyResult = await captureHighlightBlob(target);
+        const videoBlob = rallyResult ? (rallyResult.blob || rallyResult) : null;
+        let videoBlobUrl = null;
+        if (videoBlob) {
+          videoBlobUrl = URL.createObjectURL(videoBlob);
+        }
+
+        const newClip = store.triggerPointHighlight({
+          type: type,
+          label: label,
+          target: target,
+          videoBlobOrUrl: videoBlobUrl,
+          rallyInfo: rallyResult
+        });
+
+        if (newClip && newClip.id && videoBlob) {
+          const activeMatch = store.getState().activeMatch || {};
+          await saveLocalClipBlob(newClip.id, videoBlob, {
+            matchId: activeMatch.id,
+            opponent: activeMatch.opponent,
+            matchDate: activeMatch.date,
+            set: newClip.set,
+            score: newClip.score,
+            label: newClip.label,
+            comment: newClip.comment || newClip.label,
+            durationMs: rallyResult ? rallyResult.durationMs : null
+          });
+          if (activeMatch && activeMatch.id) {
+            uploadHighlightToFirebaseStorage(activeMatch.id, newClip.id, videoBlob, {
+              matchDate: activeMatch.date,
+              opponent: activeMatch.opponent,
+              set: newClip.set,
+              score: newClip.score,
+              label: newClip.label,
+              comment: newClip.comment || newClip.label
+            });
+          }
+        }
+
+        if (activeTriggerBtn) {
+          activeTriggerBtn.textContent = '✓ Last Pt. Highlighted';
           setTimeout(() => {
             activeTriggerBtn.style.transform = 'scale(1)';
             activeTriggerBtn.textContent = originalText;
@@ -1386,7 +1782,7 @@ export function renderStreamerView(container, navigate) {
 
   btnTogglePointTarget.onclick = (e) => {
     e.stopPropagation();
-    const nextTarget = (highlightPointTarget === 'current') ? 'previous' : 'current';
+    const nextTarget = (highlightPointTarget === 'current') ? 'last' : 'current';
     updatePointTargetUI(nextTarget);
   };
 
@@ -1541,21 +1937,128 @@ export function renderStreamerView(container, navigate) {
 
   // --- 7. Cleanup ---
   function cleanup() {
+    const currentActiveMatch = store.getState().activeMatch;
+    if (currentActiveMatch && currentActiveMatch.id) {
+      webrtcService.stopBroadcast(currentActiveMatch.id);
+    }
     if (mediaStream) {
       mediaStream.getTracks().forEach(t => t.stop());
     }
+
+    // If active buffer has pending highlights, finalize and export them before shutting down
+    const activeSlot = buffers[activeSlotId];
+    if (activeSlot && activeSlot.pendingHighlights && activeSlot.pendingHighlights.length > 0 && activeSlot.recorder && activeSlot.recorder.state === 'recording') {
+      try {
+        const mimeType = activeSlot.recorder.mimeType || getBestSupportedVideoMime() || 'video/mp4';
+        const actualDurationMs = Date.now() - activeSlot.startTime;
+        const m = store.getState().activeMatch || {};
+        if (activeSlot.chunks.length > 0) {
+          const blob = new Blob(activeSlot.chunks, { type: mimeType });
+          const rallyMeta = {
+            blob,
+            set: m.currentSet || 1,
+            score: store.getScoreSummaryString() || '0 - 0',
+            timestamp: Date.now(),
+            durationMs: actualDurationMs,
+            startTime: activeSlot.startTime
+          };
+          for (const pending of activeSlot.pendingHighlights) {
+            exportFinalizedHighlight(pending, rallyMeta);
+          }
+        }
+      } catch (e) {
+        console.warn('[StreamerView] Error exporting pending highlights on cleanup:', e);
+      }
+    }
+
+    // Stop all 3 buffer slot recorders cleanly
+    BUFFER_SLOT_IDS.forEach(id => {
+      const s = buffers[id];
+      if (s.recorder) {
+        s.recorder.ondataavailable = null;
+        s.recorder.onstop = null;
+        try { if (s.recorder.state !== 'inactive') s.recorder.stop(); } catch (e) {}
+        s.recorder = null;
+      }
+      s.chunks = [];
+      s.status = 'idle';
+      s.pendingHighlights = [];
+    });
+
     if (wakeLock) {
       wakeLock.release().catch(() => {});
     }
   }
 
+  const activeM = store.getState().activeMatch;
+  if (activeM && activeM.id) {
+    store.initChatSync(activeM.id);
+  }
+
   initCamera();
   updateUI();
   const unsubscribe = store.subscribe(updateUI);
+  const unsubPointFinalized = store.onPointFinalized((pt) => {
+    finalizeRallySegment(pt.finalSet, pt.finalScore, pt.endTime);
+  });
+  const unsubScoreAction = store.onScoreActionOccurred((actionTimestamp) => {
+    handleScoreAction(actionTimestamp);
+  });
+
+  const handleVisibilityChange = async () => {
+    if (document.visibilityState === 'visible') {
+      console.log('[StreamerView] Returning to foreground (e.g. after phone call/app switch). Verifying camera & wakeLock...');
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+        } catch (e) {}
+      }
+      if (mediaStream) {
+        const vTrack = mediaStream.getVideoTracks()[0];
+        if (!vTrack || vTrack.readyState === 'ended' || vTrack.muted) {
+          console.warn('[StreamerView] Camera track ended or muted while app was in background. Re-initializing camera...');
+          initCamera();
+        }
+      }
+    }
+  };
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+
+  const syncStatusPill = container.querySelector('#sync-status-pill');
+  let unsubSync = null;
+  if (syncStatusPill) {
+    syncStatusPill.addEventListener('click', () => {
+      triggerAutoSyncSweep();
+    });
+
+    unsubSync = onSyncStatusChanged((status) => {
+      const unsynced = status.unsyncedCount || 0;
+      const isSyncing = Boolean(status.isUploading);
+
+      // Strictly the number of unsynced videos (no words)
+      syncStatusPill.textContent = String(unsynced);
+
+      // Minimalist styling: pulse if syncing, amber if pending, dim if 0
+      if (isSyncing) {
+        syncStatusPill.className = 'sync-unsynced-badge syncing';
+        syncStatusPill.title = `${unsynced} unsynced (syncing...)`;
+      } else if (unsynced > 0) {
+        syncStatusPill.className = 'sync-unsynced-badge pending';
+        syncStatusPill.title = `${unsynced} unsynced`;
+      } else {
+        syncStatusPill.className = 'sync-unsynced-badge idle';
+        syncStatusPill.title = '0 unsynced';
+      }
+    });
+  }
 
   return () => {
+    if (unsubSync) unsubSync();
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
     cleanup();
     unsubscribe();
+    if (unsubPointFinalized) unsubPointFinalized();
+    if (unsubScoreAction) unsubScoreAction();
   };
 }
 
